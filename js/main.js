@@ -314,12 +314,12 @@ function isMatchDeleted(match, deletedList) {
 // ========================================
 function purgeLegacyDemoMatches(list) {
     if (!Array.isArray(list)) return [];
-    const demoKeywords = ["fc friends", "friends", "team a", "team b", "team_a", "team_b"];
+    const demoKeywords = ["fc friends", "friends", "team a", "team b", "team_a", "team_b", "duy tân fc", "duy tan fc", "duy tân", "duy tan"];
     return list.filter(m => {
         if (!m) return false;
         const away = String(m.Away || m.away || "").trim().toLowerCase();
         const home = String(m.Home || m.home || "").trim().toLowerCase();
-        const isDemo = demoKeywords.some(k => away === k || home === k);
+        const isDemo = demoKeywords.some(k => away === k || home === k || away.includes(k) || home.includes(k));
         return !isDemo;
     });
 }
@@ -328,7 +328,7 @@ function purgeLegacyScoresSync() {
     try {
         let scoresSync = JSON.parse(localStorage.getItem("mmo_scores_sync")) || {};
         let changed = false;
-        const demoKeywords = ["fc friends", "friends", "team a", "team b", "team_a", "team_b"];
+        const demoKeywords = ["fc friends", "friends", "team a", "team b", "team_a", "team_b", "duy tân fc", "duy tan fc", "duy tân", "duy tan"];
         for (const [k, v] of Object.entries(scoresSync)) {
             if (!v || typeof v !== "object") { delete scoresSync[k]; changed = true; continue; }
             const away = String(v.Away || "").trim().toLowerCase();
@@ -449,13 +449,13 @@ function parseMatchesFromJSON(json) {
     } catch (e) {}
 
     const list = [];
-    if (json.upcoming) {
+    if (json.upcoming && json.upcoming.away && !json.upcoming.away.toLowerCase().includes("duy t")) {
         const upObj = {
             Home: json.upcoming.home || "MMO FC",
-            Away: json.upcoming.away || "DUY TÂN FC",
-            Date: json.upcoming.date || "15/11/2026",
+            Away: json.upcoming.away,
+            Date: json.upcoming.date || "",
             Time: json.upcoming.time || "17:30",
-            Location: json.upcoming.location || "Sân bóng Duy Tân",
+            Location: json.upcoming.location || "Sân bóng",
             Tournament: json.upcoming.tournament || json.upcoming.type || "Giao hữu",
             Status: "UPCOMING",
             HomeScore: "",
@@ -609,14 +609,19 @@ async function loadMatches() {
             }
         });
 
-        if (cloudMatches && cloudMatches.length > 0) {
-            matchData = applyScoresOverride(cloudMatches);
+        if (data && data.success === true) {
+            if (cloudMatches && cloudMatches.length > 0) {
+                matchData = applyScoresOverride(cloudMatches);
+            } else {
+                matchData = [];
+            }
             try {
                 localStorage.setItem("mmo_matches_cache", JSON.stringify(matchData));
             } catch (e) {}
             renderMatchesUI(matchData);
-        } else if (!matchData || matchData.length === 0) {
-            // Trường hợp cả đám mây và cache đều không có trận nào
+        } else if (matchData && matchData.length > 0) {
+            renderMatchesUI(matchData);
+        } else {
             renderMatchesUI([]);
         }
 

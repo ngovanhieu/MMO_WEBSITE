@@ -3705,14 +3705,14 @@
             } else {
               try {
                 fetch("matches.json").then(r => r.json()).then(j => {
-                  if (j.upcoming) {
+                  if (j.upcoming && j.upcoming.away && !j.upcoming.away.toLowerCase().includes("duy t")) {
                     const list = [];
                     const upObj = {
                       Home: j.upcoming.home || "MMO FC",
-                      Away: j.upcoming.away || "DUY TÂN FC",
-                      Date: j.upcoming.date || "15/11/2026",
+                      Away: j.upcoming.away,
+                      Date: j.upcoming.date || "",
                       Time: j.upcoming.time || "17:30",
-                      Location: j.upcoming.location || "Sân bóng Duy Tân",
+                      Location: j.upcoming.location || "Sân bóng",
                       Tournament: j.upcoming.tournament || j.upcoming.type || "Giao hữu",
                       Status: "UPCOMING",
                       HomeScore: "",
@@ -4578,12 +4578,12 @@
     // ========================================
     function purgeLegacyDemoMatches(list) {
       if (!Array.isArray(list)) return [];
-      const demoKeywords = ["fc friends", "friends", "team a", "team b", "team_a", "team_b"];
+      const demoKeywords = ["fc friends", "friends", "team a", "team b", "team_a", "team_b", "duy tân fc", "duy tan fc", "duy tân", "duy tan"];
       return list.filter(m => {
         if (!m) return false;
         const away = String(m.Away || m.away || "").trim().toLowerCase();
         const home = String(m.Home || m.home || "").trim().toLowerCase();
-        const isDemo = demoKeywords.some(k => away === k || home === k);
+        const isDemo = demoKeywords.some(k => away === k || home === k || away.includes(k) || home.includes(k));
         return !isDemo;
       });
     }
@@ -4592,7 +4592,7 @@
       try {
         let scoresSync = JSON.parse(localStorage.getItem("mmo_scores_sync")) || {};
         let changed = false;
-        const demoKeywords = ["fc friends", "friends", "team a", "team b", "team_a", "team_b"];
+        const demoKeywords = ["fc friends", "friends", "team a", "team b", "team_a", "team_b", "duy tân fc", "duy tan fc", "duy tân", "duy tan"];
         for (const [k, v] of Object.entries(scoresSync)) {
           if (!v || typeof v !== "object") { delete scoresSync[k]; changed = true; continue; }
           const away = String(v.Away || "").trim().toLowerCase();
