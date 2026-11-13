@@ -15,6 +15,17 @@
 // GMAIL NHẬN THÔNG BÁO KHI CÓ ĐỘI BẮT KÈO (Tùy chọn)
 const ADMIN_NOTIFICATION_EMAIL = "";
 
+// CHUẨN HÓA TIẾNG VIỆT (BỎ DẤU, CHUYỂN THƯỜNG) ĐỂ TRÁNH LỆCH SO SÁNH
+function normalizeStr(str) {
+  if (!str) return "";
+  return String(str)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d").replace(/Đ/g, "D")
+    .toLowerCase()
+    .trim();
+}
+
 // =========================================================================
 // HÀM KHỞI TẠO BẢNG TỨC THÌ (CHỈ TẠO NẾU CHƯA CÓ)
 // =========================================================================
@@ -708,16 +719,17 @@ function doPost(e) {
     // ---------------------------------------------------------------------
     if (action === "delete_player") {
       let sheet = ss.getSheetByName("CauThu");
-      const targetName = String(data.name || "").trim().toLowerCase();
+      const targetName = String(data.name || "").trim();
+      const targetNorm = normalizeStr(targetName);
       let isDeleted = false;
 
-      if (sheet && sheet.getLastRow() > 1 && targetName) {
-        const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
-        for (let i = 0; i < rows.length; i++) {
-          if (String(rows[i][0] || "").trim().toLowerCase() === targetName) {
-            sheet.deleteRow(i + 2);
+      if (sheet && sheet.getLastRow() > 1 && targetNorm) {
+        // Quét từ dưới lên để xóa sạch tất cả các hàng trùng tên
+        for (let i = sheet.getLastRow(); i >= 2; i--) {
+          const rowVal = String(sheet.getRange(i, 1).getValue() || "").trim();
+          if (normalizeStr(rowVal) === targetNorm) {
+            sheet.deleteRow(i);
             isDeleted = true;
-            break;
           }
         }
       }
@@ -746,7 +758,7 @@ function doPost(e) {
         sheet.setFrozenRows(1);
       }
 
-      const oldName = String(data.oldName || data.name || "").trim().toLowerCase();
+      const oldName = String(data.oldName || data.name || "").trim();
       const newName = String(data.name || "").trim();
       const newNum = String(data.num || "#").trim();
       const newPos = String(data.pos || "Cầu thủ MMO FC").trim();
@@ -769,24 +781,38 @@ function doPost(e) {
         }
       }
 
+      const oldNorm = normalizeStr(oldName);
+      const newNorm = normalizeStr(newName);
+
       let isUpdated = false;
       const lastRow = sheet.getLastRow();
+      const duplicateRowIndices = [];
+
       if (lastRow > 1) {
         const rows = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
         for (let i = 0; i < rows.length; i++) {
-          if (String(rows[i][0] || "").trim().toLowerCase() === oldName) {
+          const rNorm = normalizeStr(rows[i][0]);
+          if (rNorm === oldNorm || (newNorm && rNorm === newNorm)) {
             const rowIdx = i + 2;
-            sheet.getRange(rowIdx, 1).setValue(newName);
-            sheet.getRange(rowIdx, 2).setValue(newNum);
-            sheet.getRange(rowIdx, 3).setValue(newPos);
-            sheet.getRange(rowIdx, 4).setValue(newPhoto);
-            sheet.getRange(rowIdx, 5).setValue(newGoals);
-            sheet.getRange(rowIdx, 6).setValue(newAttended);
-            sheet.getRange(rowIdx, 7).setValue(newAbsent);
-            isUpdated = true;
-            break;
+            if (!isUpdated) {
+              sheet.getRange(rowIdx, 1).setValue(newName);
+              sheet.getRange(rowIdx, 2).setValue(newNum);
+              sheet.getRange(rowIdx, 3).setValue(newPos);
+              sheet.getRange(rowIdx, 4).setValue(newPhoto);
+              sheet.getRange(rowIdx, 5).setValue(newGoals);
+              sheet.getRange(rowIdx, 6).setValue(newAttended);
+              sheet.getRange(rowIdx, 7).setValue(newAbsent);
+              isUpdated = true;
+            } else {
+              duplicateRowIndices.push(rowIdx);
+            }
           }
         }
+      }
+
+      // Xóa các dòng trùng lặp nếu có từ trước (xóa từ dưới lên)
+      for (let d = duplicateRowIndices.length - 1; d >= 0; d--) {
+        sheet.deleteRow(duplicateRowIndices[d]);
       }
 
       if (!isUpdated && newName) {
@@ -1325,7 +1351,7 @@ function saveImageToDrive(base64Data, fileName, mimeType) {
   }
 }
 
-// 8. Đọc danh sách cầu thủ từ tab CauThu (Do Admin tự thêm)
+// 8. Đọc danh sách cầu thủ từ tab CauThu (Do Admin tự thêm hoặc sửa)
 function readPlayersFromSheet(ss) {
   if (!ss) return [];
   const sheet = ss.getSheetByName("CauThu");
@@ -1336,10 +1362,16 @@ function readPlayersFromSheet(ss) {
   const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
 
   const players = [];
-  rows.forEach(r => {
+  const seenNorm = new Set();
+  // Quét từ dưới lên để lấy bản ghi mới nhất và khử triệt để trùng lặp
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i];
     const name = String(r[0] || "").trim();
-    if (name) {
-      players.push({
+    if (!name) continue;
+    const norm = normalizeStr(name);
+    if (!seenNorm.has(norm)) {
+      seenNorm.add(norm);
+      players.unshift({
         name: name,
         num: String(r[1] || "#").trim(),
         pos: String(r[2] || "Cầu thủ MMO FC").trim(),
@@ -1350,7 +1382,7 @@ function readPlayersFromSheet(ss) {
         baseAbsent: parseInt(r[6], 10) || 0
       });
     }
-  });
+  }
   return players;
 }
 
@@ -1373,15 +1405,17 @@ function computePlayerStats(matchData, attData) {
     { name: "MMO", num: "00", pos: "Đội Trưởng", baseGoals: 0, baseAttended: 0, baseAbsent: 0 }
   ];
 
-  // Nạp thêm cầu thủ do Admin thêm vào tab CauThu
+  // Nạp thêm hoặc cập nhật cầu thủ từ tab CauThu (khớp chính xác cầu thủ cốt lõi)
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const customList = readPlayersFromSheet(ss);
-    const existing = new Set(roster.map(p => p.name.toLowerCase()));
     customList.forEach(cp => {
-      if (!existing.has(cp.name.toLowerCase())) {
+      const cpNorm = normalizeStr(cp.name);
+      const coreIdx = roster.findIndex(p => normalizeStr(p.name) === cpNorm);
+      if (coreIdx !== -1) {
+        roster[coreIdx] = { ...roster[coreIdx], ...cp };
+      } else {
         roster.push(cp);
-        existing.add(cp.name.toLowerCase());
       }
     });
   } catch (e) {}

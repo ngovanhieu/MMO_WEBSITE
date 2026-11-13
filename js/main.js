@@ -1048,6 +1048,15 @@ function getEnglishRole(posOrRole) {
     return "PLAYER";
 }
 
+function normalizePlayerName(name) {
+    return String(name || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d").replace(/Đ/g, "D")
+        .toLowerCase()
+        .trim();
+}
+
 function getUnifiedSquadList() {
     let photoOverrides = {};
     try { photoOverrides = JSON.parse(localStorage.getItem("mmo_player_photos")) || {}; } catch (e) {}
@@ -1058,7 +1067,7 @@ function getUnifiedSquadList() {
     let hiddenPlayers = new Set();
     try {
         const rawHidden = JSON.parse(localStorage.getItem("mmo_hidden_players")) || [];
-        hiddenPlayers = new Set(rawHidden.map(n => String(n || "").toLowerCase().trim()));
+        hiddenPlayers = new Set(rawHidden.map(n => normalizePlayerName(n)));
     } catch (e) {}
 
     let customList = [];
@@ -1069,15 +1078,15 @@ function getUnifiedSquadList() {
 
     // 1. Quét 12 cầu thủ cốt lõi của MMO FC
     DEFAULT_CORE_PLAYERS.forEach(bp => {
-        const baseNorm = bp.baseName.toLowerCase().trim();
+        const baseNorm = normalizePlayerName(bp.baseName);
         if (hiddenPlayers.has(baseNorm)) return;
 
-        // Tìm thông tin tùy chỉnh (override số áo, vị trí, tên mới) từ Admin
+        // Tìm thông tin tùy chỉnh (override số áo, vị trí, tên mới) từ Admin hoặc Google Sheet
         const pInfo = infoOverrides[bp.baseName] 
-            || Object.entries(infoOverrides).find(([k]) => k.toLowerCase().trim() === baseNorm)?.[1];
+            || Object.entries(infoOverrides).find(([k]) => normalizePlayerName(k) === baseNorm)?.[1];
 
         const currentName = (pInfo && pInfo.name) ? String(pInfo.name).trim() : bp.name;
-        if (hiddenPlayers.has(currentName.toLowerCase().trim())) return;
+        if (hiddenPlayers.has(normalizePlayerName(currentName))) return;
 
         const currentNum = (pInfo && pInfo.num !== undefined && String(pInfo.num).trim() !== "") ? String(pInfo.num).trim() : bp.num;
         const currentRole = (pInfo && (pInfo.pos || pInfo.role)) ? (pInfo.pos || pInfo.role) : bp.role;
@@ -1085,7 +1094,7 @@ function getUnifiedSquadList() {
         const baseAttended = (pInfo && pInfo.baseAttended !== undefined) ? Number(pInfo.baseAttended) : 0;
 
         // Tìm ảnh tùy chỉnh từ Admin hoặc Drive
-        const customPhoto = photoOverrides[currentName] || photoOverrides[bp.baseName] || "";
+        const customPhoto = photoOverrides[currentName] || photoOverrides[bp.baseName] || (pInfo && pInfo.photo) || "";
         const photoUrl = customPhoto ? formatDriveImageUrl(customPhoto) : bp.defaultPhoto;
 
         const isFeatured = bp.featured || currentNum === "C" || currentNum === "99" || currentNum === "10" || String(currentRole).toLowerCase().includes("hlv") || String(currentRole).toLowerCase().includes("đội trưởng");
@@ -1105,13 +1114,13 @@ function getUnifiedSquadList() {
             isCustom: false
         });
         addedNames.add(baseNorm);
-        addedNames.add(currentName.toLowerCase().trim());
+        addedNames.add(normalizePlayerName(currentName));
     });
 
     // 2. Quét các cầu thủ thêm mới (Custom Players từ Admin / Google Sheets)
     customList.forEach(cp => {
         if (!cp || !cp.name) return;
-        const norm = cp.name.toLowerCase().trim();
+        const norm = normalizePlayerName(cp.name);
         if (hiddenPlayers.has(norm) || addedNames.has(norm)) return;
 
         const customPhoto = cp.photo || photoOverrides[cp.name] || "";
@@ -1151,27 +1160,70 @@ function syncCustomPlayers(cloudPlayers) {
         photoOverrides = JSON.parse(localStorage.getItem("mmo_player_photos")) || {};
     } catch (e) {}
 
+    let infoOverrides = {};
+    try {
+        infoOverrides = JSON.parse(localStorage.getItem("mmo_player_info_overrides")) || {};
+    } catch (e) {}
+
     // Hợp nhất dữ liệu cầu thủ từ Google Sheets nếu có
     if (Array.isArray(cloudPlayers) && cloudPlayers.length > 0) {
-        cloudPlayers.forEach(cp => {
-            if (!cp || !cp.name) return;
-
-            // Nếu là cầu thủ có cập nhật ảnh Drive
-            if (cp.photo) {
-                photoOverrides[cp.name] = formatDriveImageUrl(cp.photo);
+        // Lọc trùng lặp từ Google Sheet (chỉ giữ bản ghi mới nhất của mỗi cầu thủ)
+        const uniqueCloudPlayers = [];
+        const seenNames = new Set();
+        for (let i = cloudPlayers.length - 1; i >= 0; i--) {
+            const cp = cloudPlayers[i];
+            if (!cp || !cp.name) continue;
+            const norm = normalizePlayerName(cp.name);
+            if (!seenNames.has(norm)) {
+                seenNames.add(norm);
+                uniqueCloudPlayers.unshift(cp);
             }
+        }
 
-            const idx = customList.findIndex(item => item.name && item.name.toLowerCase() === cp.name.toLowerCase());
-            if (idx === -1) {
-                customList.push(cp);
+        uniqueCloudPlayers.forEach(cp => {
+            if (!cp || !cp.name) return;
+            const cpNorm = normalizePlayerName(cp.name);
+
+            // Kiểm tra xem cầu thủ này có phải là cầu thủ cốt lõi của đội không
+            const coreMatch = DEFAULT_CORE_PLAYERS.find(bp => {
+                const bNorm = normalizePlayerName(bp.baseName);
+                const nNorm = normalizePlayerName(bp.name);
+                return bNorm === cpNorm || nNorm === cpNorm;
+            });
+
+            if (coreMatch) {
+                // Cập nhật thông tin đè trực tiếp vào cầu thủ cốt lõi, KHÔNG tạo thêm cầu thủ mới
+                infoOverrides[coreMatch.baseName] = {
+                    name: cp.name,
+                    num: cp.num !== undefined ? String(cp.num).trim() : coreMatch.num,
+                    pos: cp.pos || cp.role || coreMatch.role,
+                    role: cp.role || cp.pos || coreMatch.role,
+                    baseGoals: Number(cp.baseGoals) || 0,
+                    baseAttended: Number(cp.baseAttended) || 0,
+                    photo: cp.photo || ""
+                };
+                if (cp.photo) {
+                    photoOverrides[coreMatch.baseName] = formatDriveImageUrl(cp.photo);
+                    photoOverrides[cp.name] = formatDriveImageUrl(cp.photo);
+                }
             } else {
-                customList[idx] = { ...customList[idx], ...cp };
+                // Là cầu thủ tự thêm mới (Custom Player)
+                if (cp.photo) {
+                    photoOverrides[cp.name] = formatDriveImageUrl(cp.photo);
+                }
+                const idx = customList.findIndex(item => normalizePlayerName(item.name) === cpNorm);
+                if (idx === -1) {
+                    customList.push(cp);
+                } else {
+                    customList[idx] = { ...customList[idx], ...cp };
+                }
             }
         });
 
         try {
             localStorage.setItem("mmo_custom_players", JSON.stringify(customList));
             localStorage.setItem("mmo_player_photos", JSON.stringify(photoOverrides));
+            localStorage.setItem("mmo_player_info_overrides", JSON.stringify(infoOverrides));
         } catch (e) {}
     }
 
@@ -1236,18 +1288,30 @@ function getPlayerMeta(name) {
 
     const squad = getUnifiedSquadList();
     const low = name.toLowerCase().trim();
+    const norm = normalizePlayerName(name);
 
-    // 1. Khớp chính xác tên hiển thị hoặc tên gốc
-    let found = squad.find(p => p.name.toLowerCase().trim() === low || (p.baseName && p.baseName.toLowerCase().trim() === low));
+    // 1. Khớp theo tên chuẩn hóa (không dấu)
+    let found = squad.find(p => {
+        const pNorm = normalizePlayerName(p.name);
+        const bNorm = normalizePlayerName(p.baseName);
+        return pNorm === norm || bNorm === norm;
+    });
     if (found) return found;
 
-    // 2. Khớp bao hàm
-    if (low.length >= 3) {
-        found = squad.find(p => p.name.toLowerCase().includes(low) || low.includes(p.name.toLowerCase()));
+    // 2. Khớp chính xác tên hiển thị hoặc tên gốc
+    found = squad.find(p => p.name.toLowerCase().trim() === low || (p.baseName && p.baseName.toLowerCase().trim() === low));
+    if (found) return found;
+
+    // 3. Khớp bao hàm
+    if (norm.length >= 3) {
+        found = squad.find(p => {
+            const pNorm = normalizePlayerName(p.name);
+            return pNorm.includes(norm) || norm.includes(pNorm);
+        });
         if (found) return found;
     }
 
-    // 3. Tra trong MMO_ROSTER_INFO
+    // 4. Tra trong MMO_ROSTER_INFO
     if (MMO_ROSTER_INFO[name]) return MMO_ROSTER_INFO[name];
 
     return { num: "#", role: "Cầu thủ MMO FC", photo: "" };
@@ -1896,18 +1960,11 @@ function initAttendancePlayerSelect() {
     const sel = document.getElementById("attendancePlayer");
     if (!sel) return;
 
-    let hiddenPlayers = new Set();
-    try {
-        const rawHidden = JSON.parse(localStorage.getItem("mmo_hidden_players")) || [];
-        hiddenPlayers = new Set(rawHidden.map(n => n.toLowerCase()));
-    } catch (e) {}
-
+    const squad = getUnifiedSquadList();
     let html = '<option value="">-- Bấm để chọn danh tính cầu thủ MMO FC --</option>';
-    for (const [name, info] of Object.entries(MMO_ROSTER_INFO)) {
-        if (!hiddenPlayers.has(name.toLowerCase())) {
-            html += `<option value="${name}">#${info.num} - ${name} (${info.role})</option>`;
-        }
-    }
+    squad.forEach(p => {
+        html += `<option value="${p.name}">#${p.num} - ${p.name} (${p.role})</option>`;
+    });
     sel.innerHTML = html;
 }
 
