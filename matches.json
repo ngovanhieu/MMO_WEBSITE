@@ -1,0 +1,14 @@
+{
+  "upcoming": {
+    "type": "FRIENDLY MATCH",
+    "status": "UPCOMING",
+    "home": "MMO FC",
+    "away": "DUY TAN FC",
+    "date": "15/11/2026",
+    "time": "17:30",
+    "location": "Sân bóng Duy Tân",
+    "tournament": "Giao hữu"
+  },
+
+  "history": []
+}
