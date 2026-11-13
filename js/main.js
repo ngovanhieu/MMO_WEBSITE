@@ -4148,6 +4148,38 @@ window.addEventListener("keydown", function(e) {
     }
 });
 
+// Hỗ trợ vuốt chạm (Touch Swipe) mượt mà trên điện thoại cho Cúp & Khoảnh khắc
+(function initTouchSwipe() {
+    function bindSwipe(viewportId, onSwipeNext, onSwipePrev) {
+        const el = document.getElementById(viewportId);
+        if (!el) return;
+        let startX = 0;
+        let startY = 0;
+        el.addEventListener("touchstart", function (e) {
+            if (e.touches && e.touches.length > 0) {
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+            }
+        }, { passive: true });
+        el.addEventListener("touchend", function (e) {
+            if (!startX || !e.changedTouches || e.changedTouches.length === 0) return;
+            const diffX = e.changedTouches[0].clientX - startX;
+            const diffY = e.changedTouches[0].clientY - startY;
+            if (Math.abs(diffX) > 40 && Math.abs(diffX) > Math.abs(diffY)) {
+                if (diffX < 0) onSwipeNext();
+                else onSwipePrev();
+            }
+            startX = 0;
+            startY = 0;
+        }, { passive: true });
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        bindSwipe("trophiesModal", () => slideTrophies(1), () => slideTrophies(-1));
+        bindSwipe("momentsModal", () => slideMoments(1), () => slideMoments(-1));
+    });
+})();
+
 // ========================================
 // LẮNG NGHE ĐỒNG BỘ TỨC THÌ TỪ TRANG ADMIN (KHI MỞ 2 TAB)
 // ========================================

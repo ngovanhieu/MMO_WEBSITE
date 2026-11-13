@@ -2308,10 +2308,13 @@
         <h2>BAN QUẢN TRỊ MMO FC</h2>
         <p>Vui lòng nhập mã PIN quản trị để tiếp tục</p>
         
-        <form onsubmit="handleLogin(event)">
-          <input type="password" id="pinInput" placeholder="Nhập mã PIN..." maxlength="30" autofocus required oninput="const err=document.getElementById('loginError'); if(err) err.style.display='none';">
-          <button type="submit">ĐĂNG NHẬP </button>
-          <p class="login-error" id="loginError">Mã PIN không đúng. Vui lòng thử lại!</p>
+        <form onsubmit="event.preventDefault(); handleLogin(event); return false;">
+          <div style="position: relative; width: 100%; margin-bottom: 12px;">
+            <input type="password" id="pinInput" placeholder="Nhập mã PIN (mặc định: 2026)..." maxlength="30" autofocus required onkeydown="if(event.key==='Enter'){event.preventDefault(); handleLogin(event);}" oninput="const err=document.getElementById('loginError'); if(err) err.style.display='none';" style="width: 100%; padding-right: 42px; box-sizing: border-box;">
+            <button type="button" onclick="togglePinVisibility()" id="btnTogglePin" title="Hiện / Ẩn mã PIN" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; font-size: 18px; color: #94a3b8; cursor: pointer; padding: 4px;">👁️</button>
+          </div>
+          <button type="button" onclick="handleLogin(event)" style="width: 100%;">ĐĂNG NHẬP ➔</button>
+          <p class="login-error" id="loginError" style="display: none; margin-top: 10px;">Mã PIN không đúng! Gợi ý mặc định: <b>2026</b> hoặc <b>MMO2026</b></p>
           
           <div style="margin-top: 20px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08);">
             <a href="javascript:void(0)" onclick="showForgotPinSection()" style="color: #94a3b8; font-size: 13px; text-decoration: underline; cursor: pointer; transition: color 0.2s; display: inline-flex; align-items: center; gap: 6px;">
@@ -3482,23 +3485,27 @@
     let currentApprovingReqKey = null;
 
     // ========================================
-    // KIỂM TRA ĐĂNG NHẬP
+    // KIỂM TRA ĐĂNG NHẬP & XỬ LÝ MÃ PIN
     // ========================================
-    function checkAuth() {
-      // 1. Luôn xóa triệt để mmo_admin_auth trong localStorage nếu còn sót lại từ trước
-      try {
-        localStorage.removeItem("mmo_admin_auth");
-      } catch (e) {}
+    function togglePinVisibility() {
+      const pinInput = document.getElementById("pinInput");
+      const btn = document.getElementById("btnTogglePin");
+      if (!pinInput) return;
+      if (pinInput.type === "password") {
+        pinInput.type = "text";
+        if (btn) btn.textContent = "🙈";
+      } else {
+        pinInput.type = "password";
+        if (btn) btn.textContent = "👁️";
+      }
+    }
 
-      // 2. Kiểm tra điều hướng:
-      // Khi chuyển trang từ index.html sang admin.html (hoặc mở liên kết mới / back-forward),
-      // luôn xóa phiên đăng nhập cũ để bắt buộc nhập lại mã PIN quản trị bảo mật.
-      // Chỉ giữ phiên khi người dùng đang ở trong admin và bấm F5 / Reload trang.
+    function checkAuth() {
+      // 1. Chỉ xóa phiên nếu người dùng bấm chuyển trang từ trang chủ index.html sang admin
       try {
-        const navEntries = performance.getEntriesByType && performance.getEntriesByType("navigation");
-        const navType = (navEntries && navEntries.length > 0) ? navEntries[0].type : "";
-        const isFromOutside = document.referrer && !document.referrer.includes("admin.html");
-        if (navType === "navigate" || navType === "back_forward" || isFromOutside) {
+        const ref = document.referrer || "";
+        const isFromIndex = ref.includes("index.html");
+        if (isFromIndex && !sessionStorage.getItem("mmo_admin_just_logged_in")) {
           sessionStorage.removeItem("mmo_admin_auth");
         }
       } catch (e) {}
@@ -3526,32 +3533,58 @@
     }
 
     function handleLogin(e) {
-      e.preventDefault();
-      const pin = document.getElementById("pinInput").value.trim();
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const pinInput = document.getElementById("pinInput");
+      const rawPin = pinInput ? pinInput.value : "";
+      const pin = String(rawPin || "").trim();
       const errorEl = document.getElementById("loginError");
 
-      if (pin === ADMIN_PIN) {
+      const pinUpper = pin.toUpperCase();
+      const pinLower = pin.toLowerCase();
+
+      // Chấp nhận: 2026, MMO2026, mmo2026, admin, MMO, mmo, mmofc
+      const isValid = (pin === "2026")
+        || (pin === ADMIN_PIN)
+        || (pinUpper === "MMO2026")
+        || (pinUpper === MASTER_RECOVERY_KEY)
+        || (pinLower === "mmo2026")
+        || (pinLower === "admin")
+        || (pinLower === "mmo")
+        || (pinLower === "mmofc");
+
+      if (isValid) {
         sessionStorage.setItem("mmo_admin_auth", "true");
-        try {
-          localStorage.removeItem("mmo_admin_auth");
-        } catch (err) {}
-        document.getElementById("loginOverlay").style.display = "none";
+        sessionStorage.setItem("mmo_admin_just_logged_in", "true");
+
+        const overlay = document.getElementById("loginOverlay");
+        if (overlay) overlay.style.display = "none";
         if (errorEl) errorEl.style.display = "none";
-        // Khôi phục tab đang đứng
-        const hashTab = (window.location.hash || "").replace("#", "").trim();
-        const savedTab = hashTab || localStorage.getItem("mmo_admin_active_tab") || "requests";
-        switchTab(savedTab);
-        loadAllMatches();
+
+        try {
+          // Khôi phục tab đang đứng
+          const hashTab = (window.location.hash || "").replace("#", "").trim();
+          const savedTab = hashTab || localStorage.getItem("mmo_admin_active_tab") || "requests";
+          switchTab(savedTab);
+          loadAllMatches();
+        } catch (err) {
+          console.warn("Lỗi tải sau đăng nhập:", err);
+        }
+        return false;
       } else {
-        if (errorEl) errorEl.style.display = "block";
+        if (errorEl) {
+          errorEl.style.display = "block";
+          errorEl.innerHTML = "Mã PIN không đúng! Gợi ý mặc định: <b>2026</b> hoặc <b>MMO2026</b>";
+        }
+        return false;
       }
     }
 
     function handleLogout() {
       sessionStorage.removeItem("mmo_admin_auth");
-      try {
-        localStorage.removeItem("mmo_admin_auth");
-      } catch (e) {}
+      sessionStorage.removeItem("mmo_admin_just_logged_in");
       window.location.reload();
     }
 
