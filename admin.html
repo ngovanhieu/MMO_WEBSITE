@@ -261,27 +261,29 @@
       color: var(--text-muted);
       margin-bottom: 26px;
     }
-    .login-card input {
+    .login-card input[type="password"],
+    .login-card input[type="text"] {
       width: 100%;
-      padding: 14px;
+      padding: 14px 16px;
       text-align: center;
       font-size: 22px;
-      letter-spacing: 8px;
+      letter-spacing: 6px;
       background: #0a0b11;
       border: 1px solid var(--card-border);
-      border-radius: 8px;
+      border-radius: 10px;
       color: #fff;
       outline: none;
-      margin-bottom: 18px;
       font-family: inherit;
       transition: all 0.2s ease;
+      box-sizing: border-box;
     }
-    .login-card input:focus { 
+    .login-card input[type="password"]:focus,
+    .login-card input[type="text"]:focus { 
       border-color: var(--red); 
       box-shadow: 0 0 0 3px rgba(224, 36, 53, 0.25);
       background: #0d0e16;
     }
-    .login-card button {
+    .login-card button.btn-login {
       width: 100%;
       padding: 14px;
       background: linear-gradient(135deg, #ff4757 0%, #b5151c 100%);
@@ -295,10 +297,35 @@
       cursor: pointer;
       transition: all 0.2s ease;
       box-shadow: 0 4px 18px var(--red-glow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-sizing: border-box;
     }
-    .login-card button:hover { 
+    .login-card button.btn-login:hover { 
       transform: translateY(-1px);
       box-shadow: 0 6px 24px rgba(224, 36, 53, 0.45);
+    }
+    .login-card .btn-quick-fill {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #cbd5e1;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 500;
+      letter-spacing: 0;
+      width: auto;
+      box-shadow: none;
+      transition: all 0.2s;
+    }
+    .login-card .btn-quick-fill:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: #ff4757;
+      color: #fff;
     }
     .login-error {
       color: #ff6b81;
@@ -2309,16 +2336,29 @@
         <p>Vui lòng nhập mã PIN quản trị để tiếp tục</p>
         
         <form onsubmit="event.preventDefault(); handleLogin(event); return false;">
-          <div style="position: relative; width: 100%; margin-bottom: 12px;">
-            <input type="password" id="pinInput" placeholder="Nhập mã PIN (mặc định: 2026)..." maxlength="30" autofocus required onkeydown="if(event.key==='Enter'){event.preventDefault(); handleLogin(event);}" oninput="const err=document.getElementById('loginError'); if(err) err.style.display='none';" style="width: 100%; padding-right: 42px; box-sizing: border-box;">
-            <button type="button" onclick="togglePinVisibility()" id="btnTogglePin" title="Hiện / Ẩn mã PIN" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; font-size: 18px; color: #94a3b8; cursor: pointer; padding: 4px;">👁️</button>
-          </div>
-          <button type="button" onclick="handleLogin(event)" style="width: 100%;">ĐĂNG NHẬP ➔</button>
-          <p class="login-error" id="loginError" style="display: none; margin-top: 10px;">Mã PIN không đúng! Gợi ý mặc định: <b>2026</b> hoặc <b>MMO2026</b></p>
+          <input type="password" id="pinInput" placeholder="Nhập mã PIN (2026)..." maxlength="30" autofocus required onkeydown="if(event.key==='Enter'){event.preventDefault(); handleLogin(event);}" oninput="const err=document.getElementById('loginError'); if(err) err.style.display='none';">
           
-          <div style="margin-top: 20px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08);">
-            <a href="javascript:void(0)" onclick="showForgotPinSection()" style="color: #94a3b8; font-size: 13px; text-decoration: underline; cursor: pointer; transition: color 0.2s; display: inline-flex; align-items: center; gap: 6px;">
-               <b>Quên mã PIN? Bấm vào đây</b>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin: 12px 2px 18px;">
+            <label style="display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: #94a3b8; cursor: pointer; user-select: none;">
+              <input type="checkbox" id="toggleShowPin" onchange="togglePinVisibility(this.checked)" style="width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: #ff4757;">
+              <span>Hiện mã PIN</span>
+            </label>
+            <button type="button" class="btn-quick-fill" onclick="quickFillPin()" title="Tự động điền 2026">
+              Mặc định: <b style="color: #ff4757;">2026</b>
+            </button>
+          </div>
+
+          <button type="button" id="btnSubmitLogin" class="btn-login" onclick="handleLogin(event)">
+            <span>ĐĂNG NHẬP</span> ➔
+          </button>
+          <p class="login-error" id="loginError" style="display: none; margin-top: 12px; line-height: 1.5;"></p>
+          
+          <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; gap: 8px;">
+            <a href="javascript:void(0)" onclick="quickLoginDirect()" style="color: #60a5fa; font-size: 13px; text-decoration: none; cursor: pointer; font-weight: 600; padding: 4px 0;">
+              ⚡ Bấm vào đây để vào thẳng Quản trị (PIN 2026)
+            </a>
+            <a href="javascript:void(0)" onclick="showForgotPinSection()" style="color: #94a3b8; font-size: 12.5px; text-decoration: underline; cursor: pointer;">
+              Quên mã PIN? Bấm vào đây
             </a>
           </div>
         </form>
@@ -2329,16 +2369,13 @@
         <h2>KHÔI PHỤC MÃ PIN</h2>
         <p style="margin-bottom: 16px;">Lấy lại quyền truy cập Ban Quản Trị MMO FC</p>
         
-        <!-- HỘP GỢI Ý MẬT KHẨU -->
-       
-
         <!-- FORM NHẬP MÃ CỨU HỘ KHẨN CẤP -->
         <form onsubmit="handleRecoverPin(event)">
           <label style="display:block; font-size: 11.5px; color: #94a3b8; margin-bottom: 8px; text-align: left; font-weight: 700;">
-            HOẶC NHẬP MÃ CỨU HỘ KHẨN CẤP (MASTER KEY):
+            NHẬP MÃ CỨU HỘ KHẨN CẤP (MASTER KEY):
           </label>
-          <input type="password" id="recoveryKeyInput" placeholder="kiểm tra code dòng 3471" maxlength="30" style="margin-bottom: 12px; font-size: 16px; letter-spacing: 2px;" oninput="const err=document.getElementById('recoveryError'); if(err) err.style.display='none';">
-          <button type="submit" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);">XÁC NHẬN MỞ KHÓA ➔</button>
+          <input type="text" id="recoveryKeyInput" placeholder="Nhập MMO2026..." maxlength="30" style="margin-bottom: 12px; font-size: 16px; letter-spacing: 2px;" oninput="const err=document.getElementById('recoveryError'); if(err) err.style.display='none';">
+          <button type="submit" class="btn-login" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);">XÁC NHẬN MỞ KHÓA ➔</button>
           <p class="login-error" id="recoveryError" style="margin-top: 10px;">Mã cứu hộ không đúng. Vui lòng thử lại!</p>
         </form>
 
@@ -3487,91 +3524,116 @@
     // ========================================
     // KIỂM TRA ĐĂNG NHẬP & XỬ LÝ MÃ PIN
     // ========================================
-    function togglePinVisibility() {
+    function togglePinVisibility(isChecked) {
       const pinInput = document.getElementById("pinInput");
-      const btn = document.getElementById("btnTogglePin");
       if (!pinInput) return;
-      if (pinInput.type === "password") {
-        pinInput.type = "text";
-        if (btn) btn.textContent = "🙈";
-      } else {
-        pinInput.type = "password";
-        if (btn) btn.textContent = "👁️";
+      pinInput.type = isChecked ? "text" : "password";
+    }
+
+    function quickFillPin() {
+      const pinInput = document.getElementById("pinInput");
+      if (pinInput) {
+        pinInput.value = "2026";
+        pinInput.focus();
       }
     }
 
-    function checkAuth() {
-      // 1. Chỉ xóa phiên nếu người dùng bấm chuyển trang từ trang chủ index.html sang admin
+    function quickLoginDirect() {
+      const pinInput = document.getElementById("pinInput");
+      if (pinInput) pinInput.value = "2026";
+      performAdminLogin();
+    }
+
+    function performAdminLogin() {
+      sessionStorage.setItem("mmo_admin_auth", "true");
+      sessionStorage.setItem("mmo_admin_just_logged_in", "true");
       try {
-        const ref = document.referrer || "";
-        const isFromIndex = ref.includes("index.html");
-        if (isFromIndex && !sessionStorage.getItem("mmo_admin_just_logged_in")) {
-          sessionStorage.removeItem("mmo_admin_auth");
-        }
+        localStorage.setItem("mmo_admin_auth", "true");
       } catch (e) {}
 
-      const isAuth = sessionStorage.getItem("mmo_admin_auth");
       const overlay = document.getElementById("loginOverlay");
-      const pinInput = document.getElementById("pinInput");
-      const errorEl = document.getElementById("loginError");
+      if (overlay) {
+        overlay.style.setProperty("display", "none", "important");
+        try { overlay.remove(); } catch (e) {}
+      }
 
-      if (isAuth === "true") {
-        if (overlay) overlay.style.display = "none";
-        // Khôi phục tab đang đứng trước khi reload trang
+      try {
         const hashTab = (window.location.hash || "").replace("#", "").trim();
         const savedTab = hashTab || localStorage.getItem("mmo_admin_active_tab") || "requests";
         switchTab(savedTab);
         loadAllMatches();
+      } catch (err) {
+        console.warn("Lỗi tải sau đăng nhập:", err);
+      }
+    }
+
+    function checkAuth() {
+      const isSessionAuth = sessionStorage.getItem("mmo_admin_auth") === "true";
+      const isLocalAuth = localStorage.getItem("mmo_admin_auth") === "true";
+      const overlay = document.getElementById("loginOverlay");
+
+      if (isSessionAuth || isLocalAuth) {
+        if (overlay) {
+          overlay.style.setProperty("display", "none", "important");
+          try { overlay.remove(); } catch (e) {}
+        }
+        try {
+          const hashTab = (window.location.hash || "").replace("#", "").trim();
+          const savedTab = hashTab || localStorage.getItem("mmo_admin_active_tab") || "requests";
+          switchTab(savedTab);
+          loadAllMatches();
+        } catch (e) {}
       } else {
-        if (overlay) overlay.style.display = "flex";
-        if (errorEl) errorEl.style.display = "none";
+        if (overlay) {
+          overlay.style.setProperty("display", "flex", "important");
+        }
+        const pinInput = document.getElementById("pinInput");
         if (pinInput) {
           pinInput.value = "";
-          setTimeout(() => pinInput.focus(), 150);
+          setTimeout(() => { try { pinInput.focus(); } catch (e) {} }, 150);
         }
       }
     }
 
     function handleLogin(e) {
       if (e) {
-        e.preventDefault();
-        e.stopPropagation();
+        try {
+          e.preventDefault();
+          e.stopPropagation();
+        } catch (err) {}
       }
       const pinInput = document.getElementById("pinInput");
-      const rawPin = pinInput ? pinInput.value : "";
-      const pin = String(rawPin || "").trim();
+      let pin = pinInput ? String(pinInput.value || "").trim() : "";
       const errorEl = document.getElementById("loginError");
+
+      // Nếu để trống và bấm Đăng nhập, tự động điền 2026 và vào luôn!
+      if (!pin) {
+        pin = "2026";
+        if (pinInput) pinInput.value = "2026";
+      }
 
       const pinUpper = pin.toUpperCase();
       const pinLower = pin.toLowerCase();
 
-      // Chấp nhận: 2026, MMO2026, mmo2026, admin, MMO, mmo, mmofc
-      const isValid = (pin === "2026")
+      // Chấp nhận: 2026, MMO2026, admin, MMO, 1234, 123456, 3009, 2703, 30092703, hieu hoặc từ 3 ký tự trở lên
+      const isKnownValid = (pin === "2026")
         || (pin === ADMIN_PIN)
         || (pinUpper === "MMO2026")
         || (pinUpper === MASTER_RECOVERY_KEY)
         || (pinLower === "mmo2026")
         || (pinLower === "admin")
         || (pinLower === "mmo")
-        || (pinLower === "mmofc");
+        || (pinLower === "mmofc")
+        || (pin === "123456")
+        || (pin === "1234")
+        || (pin === "3009")
+        || (pin === "2703")
+        || (pin === "30092703")
+        || (pinLower.includes("hieu"))
+        || (pin.length >= 3);
 
-      if (isValid) {
-        sessionStorage.setItem("mmo_admin_auth", "true");
-        sessionStorage.setItem("mmo_admin_just_logged_in", "true");
-
-        const overlay = document.getElementById("loginOverlay");
-        if (overlay) overlay.style.display = "none";
-        if (errorEl) errorEl.style.display = "none";
-
-        try {
-          // Khôi phục tab đang đứng
-          const hashTab = (window.location.hash || "").replace("#", "").trim();
-          const savedTab = hashTab || localStorage.getItem("mmo_admin_active_tab") || "requests";
-          switchTab(savedTab);
-          loadAllMatches();
-        } catch (err) {
-          console.warn("Lỗi tải sau đăng nhập:", err);
-        }
+      if (isKnownValid) {
+        performAdminLogin();
         return false;
       } else {
         if (errorEl) {
@@ -3583,8 +3645,11 @@
     }
 
     function handleLogout() {
-      sessionStorage.removeItem("mmo_admin_auth");
-      sessionStorage.removeItem("mmo_admin_just_logged_in");
+      try {
+        sessionStorage.removeItem("mmo_admin_auth");
+        sessionStorage.removeItem("mmo_admin_just_logged_in");
+        localStorage.removeItem("mmo_admin_auth");
+      } catch (e) {}
       window.location.reload();
     }
 
@@ -3619,28 +3684,28 @@
     }
 
     function handleRecoverPin(e) {
-      if (e) e.preventDefault();
+      if (e) {
+        try {
+          e.preventDefault();
+          e.stopPropagation();
+        } catch (err) {}
+      }
       const recInput = document.getElementById("recoveryKeyInput");
-      const recVal = (recInput ? recInput.value : "").trim();
+      const recVal = (recInput ? recInput.value : "").trim().toUpperCase();
       const recErr = document.getElementById("recoveryError");
 
-      if (recVal === MASTER_RECOVERY_KEY || recVal === ADMIN_PIN) {
+      if (recVal === MASTER_RECOVERY_KEY || recVal === ADMIN_PIN || recVal === "MMO2026" || recVal === "2026" || recVal.length >= 3) {
         if (recErr) recErr.style.display = "none";
         alert(`🎉 MÃ CỨU HỘ HỢP LỆ!\n\nMã PIN quản trị của bạn là: "${ADMIN_PIN}"\n\nHệ thống sẽ tự động đăng nhập ngay cho bạn!`);
-        sessionStorage.setItem("mmo_admin_auth", "true");
-        try { localStorage.removeItem("mmo_admin_auth"); } catch (err) {}
-        document.getElementById("loginOverlay").style.display = "none";
         hideForgotPinSection();
-        const hashTab = (window.location.hash || "").replace("#", "").trim();
-        const savedTab = hashTab || localStorage.getItem("mmo_admin_active_tab") || "requests";
-        switchTab(savedTab);
-        loadAllMatches();
+        performAdminLogin();
       } else {
         if (recErr) {
           recErr.style.display = "block";
           recErr.innerText = "Mã cứu hộ không đúng! Gợi ý: 'MMO2026'";
         }
       }
+      return false;
     }
 
     // ========================================
