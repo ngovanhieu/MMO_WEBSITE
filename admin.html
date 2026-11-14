@@ -4563,7 +4563,7 @@
     // DANH SÁCH ĐỘI HÌNH & BẢNG THỐNG KÊ CẦU THỦ
     // ========================================
     const MMO_BASE_ROSTER = [
-      { name: "Nguyen sida", num: "C", pos: "Coach / HLV Trưởng", photo: "img/Nguyen.jpg", baseGoals: 0, baseAttended: 0, baseAbsent: 0 },
+      { name: "N73", num: "C", pos: "Coach / HLV Trưởng", photo: "img/Nguyen.jpg", baseGoals: 0, baseAttended: 0, baseAbsent: 0 },
       { name: "Thôi Nghé", num: "27", pos: "Tiền vệ Trung tâm", photo: "img/Thoi.jpg", baseGoals: 0, baseAttended: 0, baseAbsent: 0 },
       { name: "Thịnh Bánh Mỳ", num: "07", pos: "Tiền vệ Cánh", photo: "img/lethinh.jpg", baseGoals: 0, baseAttended: 0, baseAbsent: 0 },
       { name: "Lê Huy", num: "25", pos: "Trung vệ Thép", photo: "img/Huy.jpg", baseGoals: 0, baseAttended: 0, baseAbsent: 0 },
@@ -4578,7 +4578,7 @@
     ];
 
     const MMO_BASE_DEFAULT_PHOTOS = {
-      "Nguyen sida": "img/Nguyen.jpg",
+      "N73": "img/Nguyen.jpg",
       "Thôi Nghé": "img/Thoi.jpg",
       "Thịnh Bánh Mỳ": "img/lethinh.jpg",
       "Lê Huy": "img/Huy.jpg",
@@ -4593,6 +4593,36 @@
     };
 
     function getAdminRoster() {
+      // Tự động chuyển đổi sạch dữ liệu cache cũ từ "Nguyen sida" sang "N73"
+      try {
+        let pOverrides = JSON.parse(localStorage.getItem("mmo_player_photos")) || {};
+        if (pOverrides["Nguyen sida"]) {
+          pOverrides["N73"] = pOverrides["Nguyen sida"];
+          delete pOverrides["Nguyen sida"];
+          localStorage.setItem("mmo_player_photos", JSON.stringify(pOverrides));
+        }
+        let iOverrides = JSON.parse(localStorage.getItem("mmo_player_info_overrides")) || {};
+        if (iOverrides["Nguyen sida"]) {
+          iOverrides["N73"] = { ...iOverrides["Nguyen sida"], name: "N73" };
+          delete iOverrides["Nguyen sida"];
+          localStorage.setItem("mmo_player_info_overrides", JSON.stringify(iOverrides));
+        }
+        let cPlayers = JSON.parse(localStorage.getItem("mmo_custom_players")) || [];
+        let cChanged = false;
+        cPlayers = cPlayers.filter(p => {
+          if (!p || !p.name) return false;
+          const norm = normalizePlayerName(p.name);
+          if (norm === "nguyen sida" || norm === "n73") {
+            cChanged = true;
+            return false;
+          }
+          return true;
+        });
+        if (cChanged) {
+          localStorage.setItem("mmo_custom_players", JSON.stringify(cPlayers));
+        }
+      } catch (err) {}
+
       let photoOverrides = {};
       try {
         photoOverrides = JSON.parse(localStorage.getItem("mmo_player_photos")) || {};

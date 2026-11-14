@@ -974,7 +974,7 @@ function startMatchCountdown(dateStr, timeStr) {
 // ========================================
 
 const MMO_ROSTER_INFO = {
-    "Nguyen sida": { num: "C", role: "Coach / HLV Trưởng", photo: "img/Nguyen.jpg", baseGoals: 0, baseAttended: 0, baseAbsent: 0 },
+    "N73": { num: "C", role: "Coach / HLV Trưởng", photo: "img/Nguyen.jpg", baseGoals: 0, baseAttended: 0, baseAbsent: 0 },
     "Thôi Nghé": { num: "27", role: "Tiền vệ Trung tâm", photo: "img/Thoi.jpg", baseGoals: 0, baseAttended: 0, baseAbsent: 0 },
     "Thịnh Bánh Mỳ": { num: "07", role: "Tiền vệ Cánh", photo: "img/lethinh.jpg", baseGoals: 0, baseAttended: 0, baseAbsent: 0 },
     "Lê Huy": { num: "25", role: "Trung vệ Thép", photo: "img/Huy.jpg", baseGoals: 0, baseAttended: 0, baseAbsent: 0 },
@@ -1008,7 +1008,7 @@ function formatDriveImageUrl(url) {
 // ========================================
 
 const MMO_BASE_DEFAULT_PHOTOS = {
-    "Nguyen sida": "img/Nguyen.jpg",
+    "N73": "img/Nguyen.jpg",
     "Thôi Nghé": "img/Thoi.jpg",
     "Thịnh Bánh Mỳ": "img/lethinh.jpg",
     "Lê Huy": "img/Huy.jpg",
@@ -1023,7 +1023,7 @@ const MMO_BASE_DEFAULT_PHOTOS = {
 };
 
 const DEFAULT_CORE_PLAYERS = [
-    { baseName: "Nguyen sida", name: "Nguyen sida", num: "C", role: "Coach / HLV Trưởng", photoClass: "photo-one", defaultPhoto: "img/Nguyen.jpg", featured: true },
+    { baseName: "N73", name: "N73", num: "C", role: "Coach / HLV Trưởng", photoClass: "photo-one", defaultPhoto: "img/Nguyen.jpg", featured: true },
     { baseName: "Thôi Nghé", name: "Thôi Nghé", num: "27", role: "Tiền vệ Trung tâm", photoClass: "photo-two", defaultPhoto: "img/Thoi.jpg", featured: false },
     { baseName: "Thịnh Bánh Mỳ", name: "Thịnh Bánh Mỳ", num: "07", role: "Tiền vệ Cánh", photoClass: "photo-three", defaultPhoto: "img/lethinh.jpg", featured: false },
     { baseName: "Lê Huy", name: "Lê Huy", num: "25", role: "Trung vệ Thép", photoClass: "photo-four", defaultPhoto: "img/Huy.jpg", featured: false },
@@ -1058,6 +1058,36 @@ function normalizePlayerName(name) {
 }
 
 function getUnifiedSquadList() {
+    // Tự động chuyển đổi sạch dữ liệu cache cũ từ "Nguyen sida" sang "N73"
+    try {
+        let pOverrides = JSON.parse(localStorage.getItem("mmo_player_photos")) || {};
+        if (pOverrides["Nguyen sida"]) {
+            pOverrides["N73"] = pOverrides["Nguyen sida"];
+            delete pOverrides["Nguyen sida"];
+            localStorage.setItem("mmo_player_photos", JSON.stringify(pOverrides));
+        }
+        let iOverrides = JSON.parse(localStorage.getItem("mmo_player_info_overrides")) || {};
+        if (iOverrides["Nguyen sida"]) {
+            iOverrides["N73"] = { ...iOverrides["Nguyen sida"], name: "N73" };
+            delete iOverrides["Nguyen sida"];
+            localStorage.setItem("mmo_player_info_overrides", JSON.stringify(iOverrides));
+        }
+        let customPlayers = JSON.parse(localStorage.getItem("mmo_custom_players")) || [];
+        let customChanged = false;
+        customPlayers = customPlayers.filter(cp => {
+            if (!cp || !cp.name) return false;
+            const norm = normalizePlayerName(cp.name);
+            if (norm === "nguyen sida" || norm === "n73") {
+                customChanged = true;
+                return false;
+            }
+            return true;
+        });
+        if (customChanged) {
+            localStorage.setItem("mmo_custom_players", JSON.stringify(customPlayers));
+        }
+    } catch (err) {}
+
     let photoOverrides = {};
     try { photoOverrides = JSON.parse(localStorage.getItem("mmo_player_photos")) || {}; } catch (e) {}
 
@@ -2645,7 +2675,7 @@ const ALL_TACTICAL_FORMATIONS = {
                     { num: "12", name: "Sỹ sancho", role: "Tiền Đạo Đột Biến", posKey: "PIVOT", note: "Đi bóng lắt léo quấy rối vòng cấm." },
                     { num: "47", name: "Vũ Đệ", role: "Hậu Vệ Quét", posKey: "FIXO", note: "Đánh chặn từ xa dũng mãnh." },
                     { num: "01", name: "MMO", role: "Đội Trưởng", posKey: "CAP", note: "Thủ lĩnh tinh thần, chỉ huy toàn đội." },
-                    { num: "00", name: "Nguyen sida", role: "HLV Trưởng", posKey: "COACH", note: "Thuyền trưởng đọc trận đấu và xoay tua liên tục." }
+                    { num: "00", name: "N73", role: "HLV Trưởng", posKey: "COACH", note: "Thuyền trưởng đọc trận đấu và xoay tua liên tục." }
                 ]
             },
             "2-2": {
@@ -2666,7 +2696,7 @@ const ALL_TACTICAL_FORMATIONS = {
                     { num: "12", name: "Sỹ sancho", role: "Tiền Đạo Đột Biến", posKey: "PIVOT", note: "Đi bóng lắt léo quấy rối vòng cấm." },
                     { num: "47", name: "Vũ Đệ", role: "Hậu Vệ Quét", posKey: "FIXO", note: "Đánh chặn từ xa dũng mãnh." },
                     { num: "01", name: "MMO", role: "Đội Trưởng", posKey: "CAP", note: "Thủ lĩnh tinh thần, chỉ huy toàn đội." },
-                    { num: "00", name: "Nguyen sida", role: "HLV Trưởng", posKey: "COACH", note: "Thuyền trưởng đọc trận đấu và xoay tua liên tục." }
+                    { num: "00", name: "N73", role: "HLV Trưởng", posKey: "COACH", note: "Thuyền trưởng đọc trận đấu và xoay tua liên tục." }
                 ]
             },
             "1-1-2": {
@@ -2687,7 +2717,7 @@ const ALL_TACTICAL_FORMATIONS = {
                     { num: "13", name: "Khải futsal", role: "Tiền Vệ Kỹ Thuật", posKey: "ALA", note: "Giữ bóng thoát pressing điêu luyện." },
                     { num: "12", name: "Sỹ sancho", role: "Tiền Đạo Đột Biến", posKey: "PIVOT", note: "Kỹ thuật quấy rối vòng cấm." },
                     { num: "01", name: "MMO", role: "Đội Trưởng", posKey: "CAP", note: "Thủ lĩnh tinh thần toàn đội." },
-                    { num: "00", name: "Nguyen sida", role: "HLV Trưởng", posKey: "COACH", note: "Điều chỉnh sơ đồ và xoay tua đội hình." }
+                    { num: "00", name: "N73", role: "HLV Trưởng", posKey: "COACH", note: "Điều chỉnh sơ đồ và xoay tua đội hình." }
                 ]
             }
         }
@@ -2714,7 +2744,7 @@ const ALL_TACTICAL_FORMATIONS = {
                     { num: "10", name: "Quang bamboo", role: "Tiền Đạo Cắm", posKey: "ST", top: 20, left: 50, note: "Chân sút chủ lực, tì đè giữ bóng, xoay sở dứt điểm sắc bén." }
                 ],
                 bench: [
-                    { num: "00", name: "Nguyen sida", role: "HLV Trưởng", posKey: "COACH", note: "Thuyền trưởng chỉ đạo chiến thuật và đọc trận đấu sắc bén." },
+                    { num: "00", name: "N73", role: "HLV Trưởng", posKey: "COACH", note: "Thuyền trưởng chỉ đạo chiến thuật và đọc trận đấu sắc bén." },
                     { num: "01", name: "MMO", role: "Đội Trưởng", posKey: "CAP", note: "Thủ lĩnh tinh thần, giữ nhịp và điều phối cự ly toàn đội." },
                     { num: "47", name: "Vũ Đệ", role: "Hậu Vệ Thép", posKey: "CB", note: "Tranh chấp mạnh mẽ, đánh chặn từ xa quyết liệt." },
                     { num: "13", name: "Khải futsal", role: "Tiền Vệ Kỹ Thuật", posKey: "CMF", note: "Xử lý bóng phạm vi hẹp, kéo bóng thoát pressing điêu luyện." },
@@ -2738,7 +2768,7 @@ const ALL_TACTICAL_FORMATIONS = {
                     { num: "07", name: "Thịnh Bánh Mỳ", role: "Hộ Công", posKey: "AMF", note: "Xâm nhập nách trung lộ, sút xa hiểm hóc." },
                     { num: "17", name: "Bin cunha", role: "Tiền Đạo Cánh", posKey: "RMF", note: "Tốc độ xé gió phản công hành lang cánh." },
                     { num: "12", name: "Sỹ sancho", role: "Tiền Vệ Đột Biến", posKey: "AMF", note: "Quấy đảo hàng thủ khi đối phương xuống sức." },
-                    { num: "00", name: "Nguyen sida", role: "HLV Trưởng", posKey: "COACH", note: "Điều chỉnh sơ đồ linh hoạt theo diễn biến trận đấu." },
+                    { num: "00", name: "N73", role: "HLV Trưởng", posKey: "COACH", note: "Điều chỉnh sơ đồ linh hoạt theo diễn biến trận đấu." },
                     { num: "01", name: "MMO", role: "Đội Trưởng", posKey: "CAP", note: "Chỉ huy toàn đội giữ vững cự ly chiến thuật." }
                 ]
             },
@@ -2759,7 +2789,7 @@ const ALL_TACTICAL_FORMATIONS = {
                     { num: "99", name: "Ngô Hiếu", role: "Hậu Vệ Biên", posKey: "RB", note: "Tăng cường phòng ngự cánh khi cần bảo toàn tỉ số." },
                     { num: "17", name: "Bin cunha", role: "Tiền Vệ Tốc Độ", posKey: "RMF", note: "Bứt tốc phản công biên chớp nhoáng." },
                     { num: "13", name: "Khải futsal", role: "Tiền Vệ Giữ Nhịp", posKey: "CMF", note: "Cầm bóng điều tiết làm giảm hưng phấn đối thủ." },
-                    { num: "00", name: "Nguyen sida", role: "HLV Trưởng", posKey: "COACH", note: "Thúc giục toàn đội pressing tầm cao gây áp lực nghẹt thở." },
+                    { num: "00", name: "N73", role: "HLV Trưởng", posKey: "COACH", note: "Thúc giục toàn đội pressing tầm cao gây áp lực nghẹt thở." },
                     { num: "01", name: "MMO", role: "Đội Trưởng", posKey: "CAP", note: "Cầu nối các tuyến, động viên tinh thần chiến đấu." }
                 ]
             }
@@ -2791,7 +2821,7 @@ const ALL_TACTICAL_FORMATIONS = {
                     { num: "12", name: "Sỹ sancho", role: "Tiền Đạo Cánh Phải", posKey: "RW", top: 24, left: 82, note: "Đi bóng lắt léo xé toang biên phải đối phương." }
                 ],
                 bench: [
-                    { num: "00", name: "Nguyen sida", role: "HLV Trưởng", posKey: "COACH", note: "Chỉ đạo chiến thuật toàn diện trên sa bàn sân 11." }
+                    { num: "00", name: "N73", role: "HLV Trưởng", posKey: "COACH", note: "Chỉ đạo chiến thuật toàn diện trên sa bàn sân 11." }
                 ]
             },
             "4-2-3-1": {
@@ -2812,7 +2842,7 @@ const ALL_TACTICAL_FORMATIONS = {
                     { num: "10", name: "Quang bamboo", role: "Tiền Đạo Cắm Mục Tiêu", posKey: "ST", top: 16, left: 50, note: "Chân sút số 1, tì đè giữ bóng và dứt điểm lạnh lùng." }
                 ],
                 bench: [
-                    { num: "00", name: "Nguyen sida", role: "HLV Trưởng", posKey: "COACH", note: "Chỉ đạo chiến thuật toàn diện trên sa bàn sân 11." }
+                    { num: "00", name: "N73", role: "HLV Trưởng", posKey: "COACH", note: "Chỉ đạo chiến thuật toàn diện trên sa bàn sân 11." }
                 ]
             },
             "3-5-2": {
@@ -2833,7 +2863,7 @@ const ALL_TACTICAL_FORMATIONS = {
                     { num: "10", name: "Quang bamboo", role: "Tiền Đạo Mũi Nhọn (Song Sát)", posKey: "ST", top: 18, left: 64, note: "Tì đè làm tường và chớp thời cơ săn bàn trong vòng cấm." }
                 ],
                 bench: [
-                    { num: "00", name: "Nguyen sida", role: "HLV Trưởng", posKey: "COACH", note: "Chỉ đạo chiến thuật toàn diện trên sa bàn sân 11." }
+                    { num: "00", name: "N73", role: "HLV Trưởng", posKey: "COACH", note: "Chỉ đạo chiến thuật toàn diện trên sa bàn sân 11." }
                 ]
             }
         }

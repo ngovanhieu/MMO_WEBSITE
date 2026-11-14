@@ -1391,7 +1391,7 @@ function readPlayersFromSheet(ss) {
 // =========================================================================
 function computePlayerStats(matchData, attData) {
   let roster = [
-    { name: "Nguyen sida", num: "C", pos: "Coach / HLV Trưởng", baseGoals: 0, baseAttended: 0, baseAbsent: 0 },
+    { name: "N73", num: "C", pos: "Coach / HLV Trưởng", baseGoals: 0, baseAttended: 0, baseAbsent: 0 },
     { name: "Thôi Nghé", num: "27", pos: "Tiền vệ Trung tâm", baseGoals: 0, baseAttended: 0, baseAbsent: 0 },
     { name: "Thịnh Bánh Mỳ", num: "07", pos: "Tiền vệ Cánh", baseGoals: 0, baseAttended: 0, baseAbsent: 0 },
     { name: "Lê Huy", num: "25", pos: "Trung vệ Thép", baseGoals: 0, baseAttended: 0, baseAbsent: 0 },
