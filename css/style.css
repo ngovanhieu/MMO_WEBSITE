@@ -1818,8 +1818,23 @@ a {
         grid-template-columns: 1fr;
     }
     .att-match-heading {
-        font-size: 20px;
+        font-size: clamp(17px, 4.4vw, 21px);
+        line-height: 1.3;
         gap: 6px 8px;
+        margin-bottom: 12px;
+    }
+    .att-team-home {
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .att-team-sep {
+        font-size: 11px;
+        padding: 2px 6px;
+        letter-spacing: 0.8px;
+        flex-shrink: 0;
+    }
+    .att-team-away {
+        word-break: break-word;
     }
     .kpi-top-row {
         flex-direction: column;
@@ -1840,6 +1855,17 @@ a {
         letter-spacing: 0.4px;
         margin-bottom: 5px;
     }
+    .att-match-heading {
+        font-size: clamp(15px, 4.2vw, 17.5px);
+        line-height: 1.3;
+        gap: 5px 7px;
+        margin-bottom: 10px;
+    }
+    .att-team-sep {
+        font-size: 10.5px;
+        padding: 1px 5px;
+        letter-spacing: 0.6px;
+    }
     .btn-att-action {
         padding: 12px 10px;
     }
@@ -1847,6 +1873,17 @@ a {
         font-size: 12px;
         letter-spacing: 0.3px;
         line-height: 1.3;
+    }
+}
+
+@media (max-width: 360px) {
+    .att-match-heading {
+        font-size: 14.5px;
+        gap: 4px 6px;
+    }
+    .att-team-sep {
+        font-size: 9.5px;
+        padding: 1px 4px;
     }
 }
 
