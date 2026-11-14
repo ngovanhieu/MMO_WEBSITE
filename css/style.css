@@ -456,9 +456,9 @@ a {
 
 .intro h2,
 .section-heading h2 {
-    font: 900 clamp(48px, 6vw, 78px)/.9 'Oswald', 'Montserrat', sans-serif;
+    font: 900 clamp(36px, 5.5vw, 68px)/1.02 'Oswald', 'Montserrat', sans-serif;
     margin: 0;
-    letter-spacing: -1px
+    letter-spacing: -0.8px;
 }
 
 .intro h2 span,
@@ -1555,6 +1555,18 @@ a {
     filter: brightness(1.08);
 }
 
+.action-btn-text {
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: inherit;
+    display: inline-block;
+    text-align: center;
+    line-height: 1.35;
+}
+
 .btn-att-action:active {
     transform: translateY(0);
 }
@@ -1780,6 +1792,22 @@ a {
     .attendance-card {
         padding: 20px 16px;
     }
+    .att-match-subtitle {
+        font-size: clamp(11.5px, 3.2vw, 13px);
+        letter-spacing: 0.6px;
+        line-height: 1.4;
+        margin-bottom: 6px;
+    }
+    .btn-att-action {
+        padding: 13px 16px;
+    }
+    .action-btn-text {
+        font-size: clamp(12.5px, 3.5vw, 14px);
+        letter-spacing: 0.6px;
+        line-height: 1.35;
+        text-align: center;
+        display: inline-block;
+    }
     .att-form-row {
         grid-template-columns: 1fr;
     }
@@ -1800,6 +1828,25 @@ a {
     .kpi-meta {
         align-items: flex-start;
         text-align: left;
+    }
+}
+
+@media (max-width: 480px) {
+    .attendance-card {
+        padding: 16px 12px;
+    }
+    .att-match-subtitle {
+        font-size: 11px;
+        letter-spacing: 0.4px;
+        margin-bottom: 5px;
+    }
+    .btn-att-action {
+        padding: 12px 10px;
+    }
+    .action-btn-text {
+        font-size: 12px;
+        letter-spacing: 0.3px;
+        line-height: 1.3;
     }
 }
 
@@ -2162,7 +2209,10 @@ a {
 
     .intro h2,
     .section-heading h2 {
-        font-size: 47px
+        font-size: clamp(28px, 8vw, 38px);
+        line-height: 1.05;
+        letter-spacing: -0.5px;
+        word-break: break-word;
     }
 
     .intro-copy {
@@ -2199,12 +2249,16 @@ a {
     .section-heading {
         align-items: flex-start;
         flex-direction: column;
-        gap: 20px;
-        margin-bottom: 30px
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+
+    .section-heading h2 {
+        margin-top: 8px;
     }
 
     .section-heading p {
-        font-size: 11px
+        font-size: 11px;
     }
 
     .squad-grid {
@@ -2842,14 +2896,28 @@ a {
     }
 }
 
+@media (max-width: 768px) {
+    .stats-section .section-heading h2 {
+        font-size: clamp(26px, 7vw, 36px);
+        line-height: 1.08;
+        letter-spacing: -0.5px;
+    }
+}
+
 @media (max-width: 520px) {
     .stats-dashboard {
         grid-template-columns: 1fr;
     }
 
     .stats-section {
-        padding-top: 60px;
-        padding-bottom: 60px;
+        padding-top: 50px;
+        padding-bottom: 50px;
+    }
+
+    .stats-section .section-heading h2 {
+        font-size: clamp(22px, 6.8vw, 30px);
+        line-height: 1.12;
+        letter-spacing: -0.3px;
     }
 }
 
@@ -2985,8 +3053,41 @@ a {
 }
 
 @media (max-width: 768px) {
+    .top-scorers-panel {
+        padding: 18px 16px;
+    }
+    .scorers-header {
+        flex-wrap: wrap;
+        gap: 10px 14px;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+    }
+    .scorers-header h3 {
+        font-size: clamp(16px, 4.4vw, 18px);
+        letter-spacing: 0.6px;
+        line-height: 1.3;
+    }
     .scorers-list { grid-template-columns: 1fr; }
     .attendance-list-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+    .top-scorers-panel {
+        padding: 14px 12px;
+    }
+    .scorers-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    .scorers-header h3 {
+        font-size: 15.5px;
+        letter-spacing: 0.4px;
+        line-height: 1.35;
+    }
+    .scorers-badge {
+        align-self: flex-start;
+    }
 }
 
 /* ==============================
