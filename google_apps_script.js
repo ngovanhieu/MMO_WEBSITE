@@ -26,6 +26,16 @@ function normalizeStr(str) {
     .trim();
 }
 
+function canonicalAttendancePlayerName(name) {
+  if (!name) return "";
+  const clean = String(name).trim();
+  const norm = normalizeStr(clean);
+  if (norm === "nguyen sida" || clean.toUpperCase() === "NGUYEN SIDA") {
+    return "N73";
+  }
+  return clean;
+}
+
 // =========================================================================
 // HÀM KHỞI TẠO BẢNG TỨC THÌ (CHỈ TẠO NẾU CHƯA CÓ)
 // =========================================================================
@@ -228,7 +238,7 @@ function doPost(e) {
         sheet.getRange(1, 1, 1, 6).setFontWeight("bold").setBackground("#d71920").setFontColor("#ffffff");
       }
 
-      const playerName = String(data.playerName || "").trim();
+      const playerName = canonicalAttendancePlayerName(data.playerName);
       const matchKey = String(data.matchKey || "").trim();
       const matchDate = String(data.matchDate || "").trim();
       const matchOpponent = String(data.matchOpponent || "").trim();
@@ -244,17 +254,19 @@ function doPost(e) {
 
       if (lastRow > 1) {
         const rows = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+        const pNorm = normalizeStr(playerName);
         for (let i = 0; i < rows.length; i++) {
           const rowMatchKey = String(rows[i][1] || "").trim();
-          const rowPlayer = String(rows[i][4] || "").trim();
+          const rowPlayer = canonicalAttendancePlayerName(rows[i][4]);
           const rowDate = String(rows[i][2] || "").trim();
 
           const isSameMatch = (matchKey && rowMatchKey === matchKey) || (matchDate && rowDate === matchDate);
-          const isSamePlayer = rowPlayer.toLowerCase() === playerName.toLowerCase();
+          const isSamePlayer = normalizeStr(rowPlayer) === pNorm;
 
           if (isSameMatch && isSamePlayer) {
             const targetRow = i + 2;
             sheet.getRange(targetRow, 1).setValue(now);
+            sheet.getRange(targetRow, 5).setValue(playerName);
             sheet.getRange(targetRow, 6).setValue(status);
             isUpdated = true;
             break;
@@ -1203,7 +1215,9 @@ function readAttendanceFromSheet(sheet) {
   const maxCol = Math.max(sheet.getLastColumn(), 6);
   const rows = sheet.getRange(2, 1, lastRow - 1, maxCol).getValues();
   const attData = [];
-  rows.forEach(r => {
+  const seenMap = {};
+
+  rows.forEach((r, idx) => {
     if (r[4]) {
       let ts = 0;
       if (r[0] instanceof Date && !isNaN(r[0].getTime())) {
@@ -1212,15 +1226,39 @@ function readAttendanceFromSheet(sheet) {
         const parsed = new Date(r[0]);
         if (!isNaN(parsed.getTime())) ts = parsed.getTime();
       }
-      attData.push({
+
+      const rawPlayer = String(r[4] || "").trim();
+      const pName = canonicalAttendancePlayerName(rawPlayer);
+      const mKey = String(r[1] || "").trim();
+      const mDate = String(r[2] || "").trim();
+      const mOpponent = String(r[3] || "").trim();
+      const mStatus = String(r[5] || "yes").trim();
+
+      // Nếu trong Sheet gốc tên là Nguyen sida, sửa luôn ô đó trên Sheet thành N73
+      if (rawPlayer !== pName && normalizeStr(rawPlayer) === "nguyen sida") {
+        try {
+          sheet.getRange(idx + 2, 5).setValue(pName);
+        } catch (e) {}
+      }
+
+      const matchSig = (mKey || mDate || "match") + "_" + normalizeStr(pName);
+      const record = {
         time: safeFormatDate(r[0], "HH:mm dd/MM"),
         timestamp: ts,
-        matchKey: String(r[1] || "").trim(),
-        matchDate: String(r[2] || "").trim(),
-        matchOpponent: String(r[3] || "").trim(),
-        playerName: String(r[4] || "").trim(),
-        status: String(r[5] || "yes").trim()
-      });
+        matchKey: mKey,
+        matchDate: mDate,
+        matchOpponent: mOpponent,
+        playerName: pName,
+        status: mStatus
+      };
+
+      if (seenMap[matchSig] !== undefined) {
+        // Ghi đè bằng bản ghi mới hơn ở dòng sau
+        attData[seenMap[matchSig]] = record;
+      } else {
+        seenMap[matchSig] = attData.length;
+        attData.push(record);
+      }
     }
   });
   return attData;
@@ -1366,8 +1404,12 @@ function readPlayersFromSheet(ss) {
   // Quét từ dưới lên để lấy bản ghi mới nhất và khử triệt để trùng lặp
   for (let i = rows.length - 1; i >= 0; i--) {
     const r = rows[i];
-    const name = String(r[0] || "").trim();
+    let name = String(r[0] || "").trim();
     if (!name) continue;
+    if (normalizeStr(name) === "nguyen sida" || name.toUpperCase() === "NGUYEN SIDA") {
+      name = "N73";
+      try { sheet.getRange(i + 2, 1).setValue("N73"); } catch (e) {}
+    }
     const norm = normalizeStr(name);
     if (!seenNorm.has(norm)) {
       seenNorm.add(norm);

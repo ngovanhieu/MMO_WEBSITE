@@ -4952,8 +4952,11 @@
 
       if (Array.isArray(allAttendance)) {
         allAttendance.forEach(row => {
-          const pName = String(row.playerName || "").trim();
+          let pName = String(row.playerName || "").trim();
           if (!pName) return;
+          if (normalizePlayerName(pName) === "nguyen sida" || pName.toUpperCase() === "NGUYEN SIDA") {
+            pName = "N73";
+          }
 
           // Nếu hệ thống đã được Reset: lọc bỏ tất cả điểm danh cũ trước mốc reset
           if (resetTime > 0) {
@@ -4988,8 +4991,11 @@
             if (resetTime > 0 && preResetMatches.includes(canonId)) continue;
 
             list.forEach(item => {
-              const pName = String(item.name || "").trim();
+              let pName = String(item.name || "").trim();
               if (!pName) return;
+              if (normalizePlayerName(pName) === "nguyen sida" || pName.toUpperCase() === "NGUYEN SIDA") {
+                pName = "N73";
+              }
 
               if (resetTime > 0) {
                 const sig = (canonId + "_" + pName).toLowerCase().replace(/\s+/g, "");

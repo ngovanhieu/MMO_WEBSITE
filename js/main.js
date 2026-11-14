@@ -1474,6 +1474,15 @@ function getMatchCanonicalKey(matchOrDate, opponent) {
     return `mmo_match_${cleanDate}`;
 }
 
+function canonicalAttendancePlayerName(name) {
+    if (!name) return "";
+    const clean = String(name).trim();
+    if (normalizePlayerName(clean) === "nguyen sida" || clean.toUpperCase() === "NGUYEN SIDA") {
+        return "N73";
+    }
+    return clean;
+}
+
 // Tự động dọn dẹp và hợp nhất các key rác cũ trong localStorage về key chuẩn duy nhất
 function cleanupLegacyAttendanceKeys() {
     const keysToRemove = [];
@@ -1489,11 +1498,13 @@ function cleanupLegacyAttendanceKeys() {
                     try { targetRecs = JSON.parse(localStorage.getItem(targetKey)) || []; } catch (e) {}
 
                     oldRecs.forEach(o => {
-                        const idx = targetRecs.findIndex(t => String(t.name || "").toLowerCase() === String(o.name || "").toLowerCase());
+                        const oName = canonicalAttendancePlayerName(o.name);
+                        const idx = targetRecs.findIndex(t => normalizePlayerName(t.name) === normalizePlayerName(oName));
                         if (idx === -1) {
-                            targetRecs.push(o);
+                            targetRecs.push({ ...o, name: oName });
                         } else if (o.status) {
                             targetRecs[idx].status = o.status;
+                            targetRecs[idx].name = oName;
                         }
                     });
                     localStorage.setItem(targetKey, JSON.stringify(targetRecs));
@@ -1503,6 +1514,43 @@ function cleanupLegacyAttendanceKeys() {
         }
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
+
+    // Quét sạch tất cả các key điểm danh để đổi vĩnh viễn "Nguyen sida" thành "N73" và khử trùng lặp
+    for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("mmo_attendance_")) {
+            try {
+                const recs = JSON.parse(localStorage.getItem(k)) || [];
+                let changed = false;
+                const uniqueMap = new Map();
+                recs.forEach(r => {
+                    const cName = canonicalAttendancePlayerName(r.name);
+                    const norm = normalizePlayerName(cName);
+                    if (r.name !== cName) changed = true;
+                    uniqueMap.set(norm, { ...r, name: cName });
+                });
+                const cleanedRecs = Array.from(uniqueMap.values());
+                if (changed || cleanedRecs.length !== recs.length) {
+                    localStorage.setItem(k, JSON.stringify(cleanedRecs));
+                }
+            } catch (e) {}
+        }
+    }
+
+    try {
+        const cloudAtt = JSON.parse(localStorage.getItem("mmo_cloud_attendance")) || [];
+        if (Array.isArray(cloudAtt) && cloudAtt.length > 0) {
+            let changed = false;
+            const cleaned = cloudAtt.map(r => {
+                const cName = canonicalAttendancePlayerName(r.playerName);
+                if (r.playerName !== cName) changed = true;
+                return { ...r, playerName: cName };
+            });
+            if (changed) {
+                localStorage.setItem("mmo_cloud_attendance", JSON.stringify(cleaned));
+            }
+        }
+    } catch (e) {}
 }
 
 // ========================================
@@ -1512,17 +1560,30 @@ function cleanupLegacyAttendanceKeys() {
 function syncAttendanceFromCloud(cloudRecords) {
     if (!Array.isArray(cloudRecords) || cloudRecords.length === 0) return;
 
-    // Lưu bản sao dữ liệu đám mây để tính toán đối chiếu
+    // Lưu bản sao dữ liệu đám mây để tính toán đối chiếu (chuẩn hóa tên ngay khi lưu)
     try {
-        localStorage.setItem("mmo_cloud_attendance", JSON.stringify(cloudRecords));
+        const cleanedCloud = cloudRecords.map(r => ({
+            ...r,
+            playerName: canonicalAttendancePlayerName(r.playerName)
+        }));
+        localStorage.setItem("mmo_cloud_attendance", JSON.stringify(cleanedCloud));
     } catch (e) {}
 
     const grouped = {};
     cloudRecords.forEach(row => {
         const canonKey = getMatchCanonicalKey(row.matchDate || row.matchKey, row.matchOpponent || "");
         if (!grouped[canonKey]) grouped[canonKey] = [];
-        const rName = String(row.playerName || "").trim();
-        if (!grouped[canonKey].some(r => r.name.toLowerCase() === rName.toLowerCase())) {
+        const rName = canonicalAttendancePlayerName(row.playerName);
+        const rNorm = normalizePlayerName(rName);
+
+        const existingIdx = grouped[canonKey].findIndex(r => normalizePlayerName(r.name) === rNorm);
+        if (existingIdx !== -1) {
+            grouped[canonKey][existingIdx] = {
+                name: rName,
+                status: row.status || "yes",
+                time: row.time || ""
+            };
+        } else {
             grouped[canonKey].push({
                 name: rName,
                 status: row.status || "yes",
@@ -1587,6 +1648,20 @@ function loadAttendance(match) {
     } catch (e) {
         records = [];
     }
+
+    // Tự động làm sạch và đồng nhất danh sách điểm danh
+    let attChanged = false;
+    const uniqueMap = new Map();
+    (records || []).forEach(r => {
+        const cName = canonicalAttendancePlayerName(r.name);
+        if (r.name !== cName) attChanged = true;
+        uniqueMap.set(normalizePlayerName(cName), { ...r, name: cName });
+    });
+    records = Array.from(uniqueMap.values());
+    if (attChanged) {
+        try { localStorage.setItem(storageKey, JSON.stringify(records)); } catch (e) {}
+    }
+
     renderAttendance(records);
 }
 
@@ -1601,7 +1676,8 @@ function selectAttStatus(status) {
 function handleAttendanceSubmit(event) {
     event.preventDefault();
     const playerSelect = document.getElementById("attendancePlayer");
-    const playerName = playerSelect.value;
+    const rawPlayerName = playerSelect.value;
+    const playerName = canonicalAttendancePlayerName(rawPlayerName);
     const status = document.getElementById("attendanceStatusVal").value || "yes";
 
     if (!playerName) {
@@ -1619,8 +1695,13 @@ function handleAttendanceSubmit(event) {
         records = [];
     }
 
-    // Cho phép đổi ý: xóa lựa chọn cũ nếu cùng tên
-    records = records.filter(r => r.name !== playerName);
+    // Cho phép đổi ý: xóa lựa chọn cũ nếu cùng tên (kể cả tên cũ Nguyen sida của N73)
+    const normPlayer = normalizePlayerName(playerName);
+    records = records.filter(r => {
+        const rNorm = normalizePlayerName(canonicalAttendancePlayerName(r.name));
+        return rNorm !== normPlayer;
+    });
+
     records.push({
         name: playerName,
         status: status,
