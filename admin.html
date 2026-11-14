@@ -2336,16 +2336,13 @@
         <p>Vui lòng nhập mã PIN quản trị để tiếp tục</p>
         
         <form onsubmit="event.preventDefault(); handleLogin(event); return false;">
-          <input type="password" id="pinInput" placeholder="Nhập mã PIN (2026)..." maxlength="30" autofocus required onkeydown="if(event.key==='Enter'){event.preventDefault(); handleLogin(event);}" oninput="const err=document.getElementById('loginError'); if(err) err.style.display='none';">
+          <input type="password" id="pinInput" placeholder="Nhập mã PIN..." maxlength="30" autofocus required onkeydown="if(event.key==='Enter'){event.preventDefault(); handleLogin(event);}" oninput="const err=document.getElementById('loginError'); if(err) err.style.display='none';">
           
-          <div style="display: flex; justify-content: space-between; align-items: center; margin: 12px 2px 18px;">
+          <div style="display: flex; justify-content: flex-start; align-items: center; margin: 10px 2px 18px;">
             <label style="display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: #94a3b8; cursor: pointer; user-select: none;">
               <input type="checkbox" id="toggleShowPin" onchange="togglePinVisibility(this.checked)" style="width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: #ff4757;">
               <span>Hiện mã PIN</span>
             </label>
-            <button type="button" class="btn-quick-fill" onclick="quickFillPin()" title="Tự động điền 2026">
-              Mặc định: <b style="color: #ff4757;">2026</b>
-            </button>
           </div>
 
           <button type="button" id="btnSubmitLogin" class="btn-login" onclick="handleLogin(event)">
@@ -2353,10 +2350,7 @@
           </button>
           <p class="login-error" id="loginError" style="display: none; margin-top: 12px; line-height: 1.5;"></p>
           
-          <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; gap: 8px;">
-            <a href="javascript:void(0)" onclick="quickLoginDirect()" style="color: #60a5fa; font-size: 13px; text-decoration: none; cursor: pointer; font-weight: 600; padding: 4px 0;">
-              ⚡ Bấm vào đây để vào thẳng Quản trị (PIN 2026)
-            </a>
+          <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); text-align: center;">
             <a href="javascript:void(0)" onclick="showForgotPinSection()" style="color: #94a3b8; font-size: 12.5px; text-decoration: underline; cursor: pointer;">
               Quên mã PIN? Bấm vào đây
             </a>
@@ -3530,20 +3524,6 @@
       pinInput.type = isChecked ? "text" : "password";
     }
 
-    function quickFillPin() {
-      const pinInput = document.getElementById("pinInput");
-      if (pinInput) {
-        pinInput.value = "2026";
-        pinInput.focus();
-      }
-    }
-
-    function quickLoginDirect() {
-      const pinInput = document.getElementById("pinInput");
-      if (pinInput) pinInput.value = "2026";
-      performAdminLogin();
-    }
-
     function performAdminLogin() {
       sessionStorage.setItem("mmo_admin_auth", "true");
       sessionStorage.setItem("mmo_admin_just_logged_in", "true");
@@ -3606,16 +3586,19 @@
       let pin = pinInput ? String(pinInput.value || "").trim() : "";
       const errorEl = document.getElementById("loginError");
 
-      // Nếu để trống và bấm Đăng nhập, tự động điền 2026 và vào luôn!
       if (!pin) {
-        pin = "2026";
-        if (pinInput) pinInput.value = "2026";
+        if (errorEl) {
+          errorEl.style.display = "block";
+          errorEl.innerHTML = "Vui lòng nhập mã PIN quản trị!";
+        }
+        if (pinInput) pinInput.focus();
+        return false;
       }
 
       const pinUpper = pin.toUpperCase();
       const pinLower = pin.toLowerCase();
 
-      // Chấp nhận: 2026, MMO2026, admin, MMO, 1234, 123456, 3009, 2703, 30092703, hieu hoặc từ 3 ký tự trở lên
+      // Chấp nhận mã PIN hợp lệ: 2026, ADMIN_PIN, MMO2026, admin, MMO, hoặc bất kỳ mã đúng từ 3 ký tự trở lên
       const isKnownValid = (pin === "2026")
         || (pin === ADMIN_PIN)
         || (pinUpper === "MMO2026")
@@ -3638,7 +3621,7 @@
       } else {
         if (errorEl) {
           errorEl.style.display = "block";
-          errorEl.innerHTML = "Mã PIN không đúng! Gợi ý mặc định: <b>2026</b> hoặc <b>MMO2026</b>";
+          errorEl.innerHTML = "Mã PIN không đúng. Vui lòng thử lại!";
         }
         return false;
       }
@@ -6589,11 +6572,11 @@
       localStorage.setItem("mmo_player_photos", JSON.stringify(photoOverrides));
 
       // Tính baseGoals sau khi trừ số bàn thắng từ các trận đã đấu để tổng bàn luôn khớp chính xác
-      const normOld = oldName.toLowerCase();
+      const normOldLower = oldName.toLowerCase();
       let matchGoals = 0;
       if (window.adminPlayerMatchGoalsMap) {
         for (const [sName, g] of Object.entries(window.adminPlayerMatchGoalsMap)) {
-          if (sName === normOld || (normOld.length > 2 && (sName.includes(normOld) || normOld.includes(sName)))) {
+          if (sName === normOldLower || (normOldLower.length > 2 && (sName.includes(normOldLower) || normOldLower.includes(sName)))) {
             matchGoals += g;
           }
         }
