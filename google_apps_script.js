@@ -825,7 +825,7 @@ function doPost(e) {
       const newNum = String(data.num || "#").trim();
       const newPos = String(data.pos || "Cầu thủ MMO FC").trim();
       let newPhoto = String(data.photo || "").trim();
-      const newGoals = parseInt(data.baseGoals, 10) || 0;
+      const newGoals = (data.baseGoals !== undefined && !isNaN(Number(data.baseGoals))) ? Number(data.baseGoals) : 0;
       const newAttended = parseInt(data.baseAttended, 10) || 0;
       const newAbsent = parseInt(data.baseAbsent, 10) || 0;
 
@@ -860,7 +860,11 @@ function doPost(e) {
               sheet.getRange(rowIdx, 1).setValue(newName);
               sheet.getRange(rowIdx, 2).setValue(newNum);
               sheet.getRange(rowIdx, 3).setValue(newPos);
-              sheet.getRange(rowIdx, 4).setValue(newPhoto);
+              if (newPhoto) {
+                sheet.getRange(rowIdx, 4).setValue(newPhoto);
+              } else if (data.resetPhoto === true) {
+                sheet.getRange(rowIdx, 4).setValue("");
+              }
               sheet.getRange(rowIdx, 5).setValue(newGoals);
               sheet.getRange(rowIdx, 6).setValue(newAttended);
               sheet.getRange(rowIdx, 7).setValue(newAbsent);
@@ -1469,7 +1473,7 @@ function readPlayersFromSheet(ss) {
         pos: String(r[2] || "Cầu thủ MMO FC").trim(),
         role: String(r[2] || "Cầu thủ MMO FC").trim(),
         photo: String(r[3] || "").trim(),
-        baseGoals: parseInt(r[4], 10) || 0,
+        baseGoals: (r[4] !== "" && !isNaN(Number(r[4]))) ? Number(r[4]) : 0,
         baseAttended: parseInt(r[5], 10) || 0,
         baseAbsent: parseInt(r[6], 10) || 0
       });
@@ -1599,7 +1603,7 @@ function computePlayerStats(matchData, attData) {
       attended: attended,
       absent: absent,
       rate: rate,
-      goals: goals
+      goals: Math.max(0, goals)
     };
   });
 }

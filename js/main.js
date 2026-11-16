@@ -1242,7 +1242,7 @@ function syncCustomPlayers(cloudPlayers) {
                     num: cp.num !== undefined ? String(cp.num).trim() : coreMatch.num,
                     pos: cp.pos || cp.role || coreMatch.role,
                     role: cp.role || cp.pos || coreMatch.role,
-                    baseGoals: Number(cp.baseGoals) || 0,
+                    baseGoals: (cp.baseGoals !== undefined && !isNaN(Number(cp.baseGoals))) ? Number(cp.baseGoals) : 0,
                     baseAttended: Number(cp.baseAttended) || 0,
                     photo: cp.photo || ""
                 };
@@ -1874,11 +1874,18 @@ function updateTopScorers(matches) {
     } catch (e) {}
     const hiddenSet = new Set(hiddenPlayers.map(h => String(h).trim().toLowerCase()));
 
+    let infoOverrides = {};
+    try {
+        infoOverrides = JSON.parse(localStorage.getItem("mmo_player_info_overrides")) || {};
+    } catch (e) {}
+
     // Khởi tạo bảng thành tích từ baseGoals của các cầu thủ trong đội hình
     const scorerCounts = {};
     for (const [name, meta] of Object.entries(MMO_ROSTER_INFO)) {
         if (!name || hiddenSet.has(name.toLowerCase().trim())) continue;
-        const base = resetTime > 0 ? 0 : (Number(meta && meta.baseGoals) || 0);
+        const nNorm = normalizePlayerName(name);
+        const ovr = infoOverrides[name] || Object.entries(infoOverrides).find(([k]) => normalizePlayerName(k) === nNorm)?.[1];
+        const base = resetTime > 0 ? 0 : (ovr && ovr.baseGoals !== undefined && !isNaN(Number(ovr.baseGoals)) ? Number(ovr.baseGoals) : (Number(meta && meta.baseGoals) || 0));
         scorerCounts[name] = base;
     }
 
@@ -1977,8 +1984,8 @@ function updateTopScorers(matches) {
     } catch (e) {}
 
     const sortedScorers = Object.entries(scorerCounts)
-        .filter(([_, goals]) => goals > 0)
-        .map(([name, goals]) => ({ name, goals }))
+        .map(([name, goals]) => ({ name, goals: Math.max(0, goals) }))
+        .filter(s => s.goals > 0)
         .sort((a, b) => b.goals - a.goals);
 
     if (sortedScorers.length === 0) {
@@ -2481,7 +2488,7 @@ function getPlayerDetailedStats(playerName) {
         const totalTracked = attended + absent;
         const rate = totalTracked > 0 ? Math.round((attended / totalTracked) * 100) : (attended > 0 ? 100 : 0);
 
-        return { goals, attended, absent, rate };
+        return { goals: Math.max(0, goals), attended, absent, rate };
     } catch (err) {
         console.warn("Lỗi tính getPlayerDetailedStats:", err);
         return { goals: 0, attended: 0, absent: 0, rate: 0 };

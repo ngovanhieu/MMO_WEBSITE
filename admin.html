@@ -3965,7 +3965,7 @@
                   name: cp.name,
                   num: (cp.num !== undefined && String(cp.num).trim() !== "") ? String(cp.num).trim() : coreMatch.num,
                   pos: cp.pos || cp.role || coreMatch.pos,
-                  baseGoals: Number(cp.baseGoals) || 0,
+                  baseGoals: (cp.baseGoals !== undefined && !isNaN(Number(cp.baseGoals))) ? Number(cp.baseGoals) : 0,
                   baseAttended: Number(cp.baseAttended) || 0,
                   photo: cp.photo || ""
                 };
@@ -5112,6 +5112,8 @@
           }
         }
 
+        goals = Math.max(0, goals);
+
         // Lưu vào lookup toàn cục
         window.adminPlayerCurrentGoals[norm] = goals;
 
@@ -5252,7 +5254,7 @@
       }).join("");
     }
 
-    function quickEditGoals(playerName, currentTotalGoals) {
+    async function quickEditGoals(playerName, currentTotalGoals) {
       const input = prompt(`Nhập tổng số bàn thắng cập nhật cho "${playerName}":`, currentTotalGoals);
       if (input === null) return;
       const num = parseInt(input.trim(), 10);
@@ -5271,7 +5273,11 @@
           }
         }
       }
-      const adjustedBaseGoals = Math.max(0, num - matchGoals);
+      const adjustedBaseGoals = num - matchGoals;
+
+      const roster = getAdminRoster();
+      const pNorm = normalizePlayerName(playerName);
+      const player = roster.find(p => normalizePlayerName(p.name) === pNorm) || { name: playerName, num: "#", pos: "Cầu thủ MMO FC" };
 
       let customList = [];
       try {
@@ -5287,9 +5293,17 @@
         try {
           infoOverrides = JSON.parse(localStorage.getItem("mmo_player_info_overrides")) || {};
         } catch (e) {}
-        const existingKey = Object.keys(infoOverrides).find(k => k.toLowerCase() === playerName.toLowerCase()) || playerName;
-        if (!infoOverrides[existingKey]) infoOverrides[existingKey] = {};
-        infoOverrides[existingKey].baseGoals = adjustedBaseGoals;
+        const corePlayerMatch = MMO_BASE_ROSTER.find(bp => normalizePlayerName(bp.name) === pNorm);
+        const targetKey = corePlayerMatch ? corePlayerMatch.name : playerName;
+        const currentData = infoOverrides[targetKey] || {};
+        infoOverrides[targetKey] = {
+          ...currentData,
+          name: player.name || playerName,
+          num: player.num || "#",
+          pos: player.pos || "Cầu thủ MMO FC",
+          baseGoals: adjustedBaseGoals
+        };
+        infoOverrides[playerName] = infoOverrides[targetKey];
         localStorage.setItem("mmo_player_info_overrides", JSON.stringify(infoOverrides));
       }
 
@@ -5298,7 +5312,29 @@
 
       renderPlayerStatsTable();
       renderScorerChips();
-      showToast(`✓ Đã cập nhật ${num} bàn thắng cho cầu thủ "${playerName}"!`, "success");
+      showToast(`✓ Đã cập nhật ${num} bàn thắng cho cầu thủ "${playerName}"! Đang lưu lên Google Sheet...`, "info");
+
+      try {
+        await fetch(API_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "edit_player",
+            oldName: player.name || playerName,
+            name: player.name || playerName,
+            num: player.num || "#",
+            pos: player.pos || "Cầu thủ MMO FC",
+            photo: (player.photo && String(player.photo).startsWith("http")) ? player.photo : "",
+            baseGoals: adjustedBaseGoals,
+            baseAttended: Number(player.baseAttended) || 0,
+            baseAbsent: Number(player.baseAbsent) || 0
+          })
+        });
+        showToast(`✓ Đã đồng bộ ${num} bàn thắng của "${playerName}" lên Google Sheet & Bảng vàng!`, "success");
+      } catch (err) {
+        console.warn("Lỗi đồng bộ quickEditGoals lên Google Apps Script:", err);
+      }
     }
 
     let currentScorersMap = {};
@@ -6751,7 +6787,7 @@
           }
         }
       }
-      const adjustedBaseGoals = Math.max(0, newGoals - matchGoals);
+      const adjustedBaseGoals = newGoals - matchGoals;
 
       // Cập nhật danh sách cầu thủ: phân biệt cầu thủ cốt lõi và cầu thủ tự thêm
       const normOld = normalizePlayerName(oldName);
@@ -6841,7 +6877,7 @@
         num: newNum,
         pos: newPos,
         photo: isPhotoReset ? "" : finalPhoto,
-        baseGoals: newGoals,
+        baseGoals: adjustedBaseGoals,
         baseAttended: newAttended,
         baseAbsent: 0
       };
