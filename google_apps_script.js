@@ -30,7 +30,7 @@ function canonicalAttendancePlayerName(name) {
   if (!name) return "";
   const clean = String(name).trim();
   const norm = normalizeStr(clean);
-  if (norm === "nguyen sida" || clean.toUpperCase() === "NGUYEN SIDA") {
+  if (norm === "nguyen sida" || norm.includes("sida") || clean.toUpperCase().includes("SIDA")) {
     return "N73";
   }
   return clean;
@@ -293,6 +293,55 @@ function doPost(e) {
     }
 
     // ---------------------------------------------------------------------
+    // A2. XÓA ĐIỂM DANH TRẬN ĐẤU (CHO PHÉP ADMIN RESET HOẶC XÓA BÁO CẦU TEST)
+    // ---------------------------------------------------------------------
+    if (action === "clear_attendance" || action === "delete_attendance") {
+      let sheet = ss.getSheetByName("DiemDanh");
+      if (!sheet) {
+        return jsonResponse({ status: "success", message: "Tab DiemDanh chưa tồn tại" });
+      }
+      const matchKey = String(data.matchKey || "").trim();
+      const matchDate = String(data.matchDate || "").trim();
+      const clearAll = data.clearAll === true || (!matchKey && !matchDate);
+
+      const lastRow = sheet.getLastRow();
+      let deletedCount = 0;
+      if (lastRow > 1) {
+        if (clearAll) {
+          deletedCount = lastRow - 1;
+          sheet.deleteRows(2, lastRow - 1);
+        } else {
+          const rows = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+          for (let i = rows.length - 1; i >= 0; i--) {
+            const rowKey = String(rows[i][1] || "").trim();
+            const rowDate = String(rows[i][2] || "").trim();
+            const isMatch = (matchKey && rowKey === matchKey) || 
+                            (matchDate && rowDate === matchDate) || 
+                            (matchKey && rowDate === matchKey) ||
+                            (matchKey && rowKey.includes(matchKey));
+            if (isMatch) {
+              sheet.deleteRow(i + 2);
+              deletedCount++;
+            }
+          }
+        }
+      }
+
+      // Cập nhật lại thống kê cầu thủ sau khi xóa điểm danh
+      try {
+        const currentMatches = readMatchesFromSheet(findMatchSheet(ss));
+        const currentAtt = readAttendanceFromSheet(sheet);
+        syncPlayerStatsSheet(ss, computePlayerStats(currentMatches, currentAtt));
+      } catch (syncErr) {}
+
+      return jsonResponse({
+        status: "success",
+        deletedCount: deletedCount,
+        message: `Đã xóa ${deletedCount} lượt điểm danh thành công`
+      });
+    }
+
+    // ---------------------------------------------------------------------
     // B. NHẬN KÈO THI ĐẤU TỪ ĐỘI KHÁCH
     // ---------------------------------------------------------------------
     if (action === "book_match") {
@@ -449,7 +498,7 @@ function doPost(e) {
     // ---------------------------------------------------------------------
     // D. KẾT THÚC TRẬN ĐẤU & CẬP NHẬT TỈ SỐ (TỪ TRANG ADMIN)
     // ---------------------------------------------------------------------
-    if (action === "finish_match") {
+    if (action === "finish_match" || action === "save_score" || action === "add_finished_match") {
       let sheet = findMatchSheet(ss);
       if (!sheet) return jsonResponse({ status: "error", message: "Không tìm thấy sheet trận đấu" });
 
@@ -458,10 +507,10 @@ function doPost(e) {
       const sheetRows = sheet.getRange(1, 1, lastRow, lastCol).getValues();
       const headers = sheetRows[0].map(h => String(h || "").trim().toLowerCase());
 
-      let homeIdx = headers.findIndex(h => h.includes("home") || h.includes("nhà") || h.includes("đội 1") || h.includes("mmo"));
-      let awayIdx = headers.findIndex(h => h.includes("away") || h.includes("khách") || h.includes("đội 2") || h.includes("đối thủ"));
       let dateIdx = headers.findIndex(h => h.includes("date") || h.includes("ngày"));
       let timeIdx = headers.findIndex(h => h.includes("time") || h.includes("giờ"));
+      let homeIdx = headers.findIndex(h => h.includes("home") || h.includes("nhà") || h.includes("đội 1") || h.includes("mmo"));
+      let awayIdx = headers.findIndex(h => h.includes("away") || h.includes("khách") || h.includes("đội 2") || h.includes("đối thủ"));
       let locIdx = headers.findIndex(h => h.includes("location") || h.includes("sân") || h.includes("địa điểm"));
       let tournIdx = headers.findIndex(h => h.includes("tourn") || h.includes("giải") || h.includes("thể thức"));
       let statusIdx = headers.findIndex(h => h.includes("status") || h.includes("trạng thái"));
@@ -469,10 +518,10 @@ function doPost(e) {
       let awayScoreIdx = headers.findIndex(h => h.includes("awayscore") || h.includes("bàn khách") || h.includes("tỉ số khách"));
       let scorersIdx = headers.findIndex(h => h.includes("scorer") || h.includes("ghi bàn") || h.includes("cầu thủ ghi bàn"));
 
-      if (homeIdx === -1) homeIdx = 0;
-      if (awayIdx === -1) awayIdx = 1;
-      if (dateIdx === -1) dateIdx = 2;
-      if (timeIdx === -1) timeIdx = 3;
+      if (dateIdx === -1) dateIdx = 0;
+      if (timeIdx === -1) timeIdx = 1;
+      if (homeIdx === -1) homeIdx = 2;
+      if (awayIdx === -1) awayIdx = 3;
       if (locIdx === -1) locIdx = 4;
       if (tournIdx === -1) tournIdx = 5;
       if (statusIdx === -1) {
@@ -535,19 +584,20 @@ function doPost(e) {
         sheet.getRange(targetRowIndex, awayScoreIdx + 1).setValue(data.AwayScore || "0");
         sheet.getRange(targetRowIndex, scorersIdx + 1).setValue(data.Scorers || "");
       } else {
-        // Nếu chưa có dòng này trên sheet, tự động thêm mới vào để không bao giờ bị mất dữ liệu
-        sheet.appendRow([
-          data.Home || "MMO FC",
-          data.Away || "Đối thủ",
-          data.Date || "",
-          data.Time || "",
-          data.Location || "Sân bóng",
-          data.Tournament || "Giao hữu",
-          "FINISHED",
-          data.HomeScore || "0",
-          data.AwayScore || "0",
-          data.Scorers || ""
-        ]);
+        // Nếu chưa có dòng này trên sheet, tự động thêm mới vào chuẩn 10 cột để không bao giờ bị mất dữ liệu
+        const totalCols = Math.max(lastCol, 10);
+        const newRow = new Array(totalCols).fill("");
+        newRow[dateIdx] = data.Date || safeFormatDate(new Date(), "dd/MM/yyyy");
+        newRow[timeIdx] = data.Time || "19:00";
+        newRow[homeIdx] = data.Home || "MMO FC";
+        newRow[awayIdx] = data.Away || "Đối thủ";
+        newRow[locIdx] = data.Location || "Sân bóng";
+        newRow[tournIdx] = data.Tournament || "Giao hữu";
+        newRow[statusIdx] = "FINISHED";
+        newRow[homeScoreIdx] = data.HomeScore !== undefined && data.HomeScore !== null && data.HomeScore !== "" ? String(data.HomeScore) : "0";
+        newRow[awayScoreIdx] = data.AwayScore !== undefined && data.AwayScore !== null && data.AwayScore !== "" ? String(data.AwayScore) : "0";
+        newRow[scorersIdx] = data.Scorers || "";
+        sheet.appendRow(newRow);
         targetRowIndex = sheet.getLastRow();
       }
 
@@ -1516,16 +1566,20 @@ function computePlayerStats(matchData, attData) {
   const finishedCount = (matchData || []).filter(m => String(m.Status || "").toUpperCase() === "FINISHED").length;
 
   return roster.map(p => {
-    const norm = p.name.toLowerCase();
+    const pNorm = normalizeStr(p.name);
     let goals = Number(p.baseGoals) || 0;
     for (const [k, v] of Object.entries(goalsMap)) {
-      if (k.includes(norm) || norm.includes(k)) goals += v;
+      const kNorm = normalizeStr(k);
+      if (kNorm === pNorm || (pNorm.length >= 3 && (kNorm.includes(pNorm) || pNorm.includes(kNorm)))) {
+        goals += v;
+      }
     }
 
     let attended = Number(p.baseAttended) || 0;
     let absent = Number(p.baseAbsent) || 0;
     for (const [k, rec] of Object.entries(attMap)) {
-      if (k.includes(norm) || norm.includes(k)) {
+      const kNorm = normalizeStr(k);
+      if (kNorm === pNorm || (pNorm.length >= 3 && (kNorm.includes(pNorm) || pNorm.includes(kNorm)))) {
         attended += Object.keys(rec.attended).length;
         absent += Object.keys(rec.absent).length;
       }

@@ -2465,10 +2465,15 @@
       <div class="admin-card">
         <div class="admin-card-header">
           <h3>LỊCH THI ĐẤU SẮP TỚI</h3>
-          <button class="btn-site btn-reload" onclick="loadAllMatches()">
-            <svg class="reload-spin-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-            <span>TẢI LẠI DỮ LIỆU</span>
-          </button>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <button class="btn-site" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; font-size: 11.5px; padding: 7px 12px; border-radius: 6px; cursor: pointer;" onclick="handleCleanTestAttendance()">
+              🧹 DỌN ĐIỂM DANH TEST
+            </button>
+            <button class="btn-site btn-reload" onclick="loadAllMatches()">
+              <svg class="reload-spin-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+              <span>TẢI LẠI DỮ LIỆU</span>
+            </button>
+          </div>
         </div>
 
         <div id="upcomingList">
@@ -3509,6 +3514,27 @@
         .trim();
     }
 
+    // HÀM LẤY VÀ LƯU DỮ LIỆU ĐIỂM SỐ & BÀN THẮNG CHUẨN XÁC, KHÔNG BỊ LỖI ÉP KIỂU
+    function getScoresSyncMap() {
+      try {
+        const raw = localStorage.getItem("mmo_scores_sync");
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch (e) {}
+      return {};
+    }
+
+    function saveScoresSyncMap(map) {
+      try {
+        if (map && typeof map === "object" && !Array.isArray(map)) {
+          localStorage.setItem("mmo_scores_sync", JSON.stringify(map));
+        }
+      } catch (e) {}
+    }
+
     var allMatches = [];
     var allRequests = [];
     var allAttendance = [];
@@ -3778,6 +3804,56 @@
 
           const cleanCloudMatches = purgeLegacyDemoMatches(cloudMatches);
 
+          // Áp dụng scoresSync để không bị mất các trận vừa nhập hoặc tỉ số ghi đè
+          const scoresSync = getScoresSyncMap();
+          cleanCloudMatches.forEach(m => {
+            const cleanHome = String(m.Home || "").trim().toLowerCase();
+            const cleanAway = String(m.Away || "").trim().toLowerCase();
+            const cleanDate = String(m.Date || "").trim().toLowerCase();
+            const mKey = (cleanHome + "_" + cleanAway + "_" + cleanDate).replace(/\s+/g, "_");
+
+            for (const [sKey, sVal] of Object.entries(scoresSync)) {
+              if (!sVal || typeof sVal !== "object") continue;
+              const targetAway = String(sVal.Away || "").trim().toLowerCase();
+              const targetDate = String(sVal.Date || "").trim().toLowerCase();
+              const awayMatches = cleanAway && targetAway && (cleanAway === targetAway);
+              const dateMatches = cleanDate && targetDate && (cleanDate === targetDate);
+              if (mKey === sKey || (awayMatches && (dateMatches || !cleanDate || !targetDate))) {
+                if (sVal.Scorers !== undefined) m.Scorers = sVal.Scorers;
+                if (sVal.HomeScore !== undefined && sVal.HomeScore !== "") m.HomeScore = sVal.HomeScore;
+                if (sVal.AwayScore !== undefined && sVal.AwayScore !== "") m.AwayScore = sVal.AwayScore;
+                if (sVal.Status) m.Status = sVal.Status;
+              }
+            }
+          });
+
+          // Bổ sung các trận đã đá trong scoresSync nếu chưa có trên sheet
+          for (const [sKey, sVal] of Object.entries(scoresSync)) {
+            if (!sVal || typeof sVal !== "object") continue;
+            if (isMatchDeleted(sVal, deletedList)) continue;
+            const targetAway = String(sVal.Away || "").trim().toLowerCase();
+            const targetDate = String(sVal.Date || "").trim().toLowerCase();
+            const exists = cleanCloudMatches.some(m => {
+              const cleanAway = String(m.Away || "").trim().toLowerCase();
+              const cleanDate = String(m.Date || "").trim().toLowerCase();
+              return cleanAway === targetAway && (cleanDate === targetDate || !cleanDate || !targetDate);
+            });
+            if (!exists) {
+              cleanCloudMatches.unshift({
+                Home: sVal.Home || "MMO FC",
+                Away: sVal.Away || "Đối thủ",
+                Date: sVal.Date || "",
+                Time: sVal.Time || "19:00",
+                Location: sVal.Location || "Sân bóng",
+                Tournament: sVal.Tournament || "Giao hữu",
+                Status: sVal.Status || "FINISHED",
+                HomeScore: sVal.HomeScore !== undefined ? sVal.HomeScore : "0",
+                AwayScore: sVal.AwayScore !== undefined ? sVal.AwayScore : "0",
+                Scorers: sVal.Scorers || ""
+              });
+            }
+          }
+
           if (cleanCloudMatches.length > 0) {
             allMatches = cleanCloudMatches;
             try {
@@ -3935,34 +4011,10 @@
             }
           });
 
-          // Hợp nhất dữ liệu điểm số/bàn thắng đã lưu trong localStorage (mmo_scores_sync)
-          let scoresSync = {};
+          // Lưu cache allMatches đã đồng bộ chuẩn
           try {
-            scoresSync = JSON.parse(localStorage.getItem("mmo_scores_sync")) || {};
+            localStorage.setItem("mmo_matches_cache", JSON.stringify(allMatches));
           } catch (e) {}
-
-          allMatches.forEach(m => {
-            const cleanHome = String(m.Home || "").trim().toLowerCase();
-            const cleanAway = String(m.Away || "").trim().toLowerCase();
-            const cleanDate = String(m.Date || "").trim().toLowerCase();
-            const mKey = (cleanHome + "_" + cleanAway + "_" + cleanDate).replace(/\s+/g, "_");
-
-            for (const [sKey, sVal] of Object.entries(scoresSync)) {
-              if (!sVal || typeof sVal !== "object") continue;
-              const targetAway = String(sVal.Away || "").trim().toLowerCase();
-              const targetDate = String(sVal.Date || "").trim().toLowerCase();
-              const awayMatches = cleanAway && targetAway && (cleanAway === targetAway);
-              const dateMatches = cleanDate && targetDate && (cleanDate === targetDate);
-              const isSame = (mKey === sKey) || (awayMatches && (dateMatches || !cleanDate || !targetDate));
-
-              if (isSame) {
-                if (sVal.Scorers !== undefined) m.Scorers = sVal.Scorers;
-                if (sVal.HomeScore !== undefined && sVal.HomeScore !== "") m.HomeScore = sVal.HomeScore;
-                if (sVal.AwayScore !== undefined && sVal.AwayScore !== "") m.AwayScore = sVal.AwayScore;
-                if (sVal.Status) m.Status = sVal.Status;
-              }
-            }
-          });
 
           // Đồng bộ Cúp từ Google Sheet
           if (data && Array.isArray(data.trophies)) {
@@ -4520,9 +4572,12 @@
               <strong>${m.Home} vs ${m.Away}</strong>
               <span>📅 Ngày: ${formatAdminDate(m.Date)} | ⏰ Giờ: ${formatAdminTime(m.Time)} | 📍 Sân: ${m.Location}</span>
             </div>
-            <div class="match-actions" style="display: flex; gap: 8px;">
+            <div class="match-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
               <button class="btn-action btn-finish" onclick="openScoreModal('${escapeStr(m.Home)}', '${escapeStr(m.Away)}', '${escapeStr(m.Date)}')">
                 ⚽ Nhập Tỉ Số Đá Xong
+              </button>
+              <button class="btn-action" style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbbf24; font-size: 11px; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(245, 158, 11, 0.25)';" onmouseout="this.style.background='rgba(245, 158, 11, 0.12)';" onclick="handleClearMatchAttendance('${escapeStr(m.Date)}', '${escapeStr(m.Away)}')">
+                📋 Xóa Điểm Danh
               </button>
               <button class="btn-action btn-del-match" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; font-size: 11px; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.25)'; this.style.borderColor='#ef4444';" onmouseout="this.style.background='rgba(239,68,68,0.12)'; this.style.borderColor='rgba(239,68,68,0.4)';" onclick="handleDeleteMatch('${escapeStr(m.Home)}', '${escapeStr(m.Away)}', '${escapeStr(m.Date)}')">
                 🗑️ Xóa
@@ -5239,7 +5294,7 @@
       }
 
       localStorage.setItem("mmo_player_sync", String(Date.now()));
-      localStorage.setItem("mmo_scores_sync", String(Date.now()));
+      localStorage.setItem("mmo_matches_updated_ts", String(Date.now()));
 
       renderPlayerStatsTable();
       renderScorerChips();
@@ -5497,11 +5552,7 @@
       };
 
       // 1. LƯU NGAY VÀO LOCALSTORAGE ĐỂ TRANG CHỦ (INDEX.HTML) ĐỒNG BỘ TỨC THÌ
-      let scoresSync = {};
-      try {
-        scoresSync = JSON.parse(localStorage.getItem("mmo_scores_sync")) || {};
-      } catch (e) {}
-
+      const scoresSync = getScoresSyncMap();
       const matchKey = (homeVal + "_" + awayVal + "_" + dateVal).toLowerCase().replace(/\s+/g, "_");
       scoresSync[matchKey] = {
         Home: homeVal,
@@ -5513,7 +5564,7 @@
         Status: "FINISHED",
         timestamp: Date.now()
       };
-      localStorage.setItem("mmo_scores_sync", JSON.stringify(scoresSync));
+      saveScoresSyncMap(scoresSync);
 
       // 2. CẬP NHẬT TRỰC TIẾP TRONG ALLMATCHES & CACHE CỦA ADMIN
       let foundInAll = false;
@@ -5750,13 +5801,10 @@
       } catch (e) {}
 
       // Lưu vào mmo_scores_sync
-      let scoresSync = {};
-      try {
-        scoresSync = JSON.parse(localStorage.getItem("mmo_scores_sync")) || {};
-      } catch (e) {}
+      const scoresSync = getScoresSyncMap();
       const matchKey = (homeVal + "_" + awayVal + "_" + dateVal).toLowerCase().replace(/\s+/g, "_");
       scoresSync[matchKey] = { ...newMatchObj, timestamp: Date.now() };
-      localStorage.setItem("mmo_scores_sync", JSON.stringify(scoresSync));
+      saveScoresSyncMap(scoresSync);
 
       // Thêm hoặc cập nhật trong allMatches
       const existIdx = allMatches.findIndex(m => {
@@ -5771,17 +5819,20 @@
       }
       localStorage.setItem("mmo_matches_cache", JSON.stringify(allMatches));
 
-      // Cập nhật giao diện admin ngay lập tức
+      // Cập nhật giao diện admin ngay lập tức (Bảng trận đấu + Thống kê cầu thủ Tab 5)
       renderMatches();
+      renderPlayerStatsTable();
+      renderScorerChips();
 
       // Kích hoạt sự kiện đồng bộ trực tiếp sang trang chủ
       localStorage.setItem("mmo_matches_updated_ts", String(Date.now()));
       try { window.dispatchEvent(new Event("storage")); } catch (e) {}
 
-      // Gửi ngầm lên Google Sheet
+      // Gửi ngầm lên Google Sheet (mode no-cors để tránh bị chặn 302 redirect)
       try {
         await fetch(API_URL, {
           method: "POST",
+          mode: "no-cors",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "finish_match",
@@ -5828,7 +5879,7 @@
 
       // 2. Xóa khỏi mmo_scores_sync nếu có
       try {
-        let scoresSync = JSON.parse(localStorage.getItem("mmo_scores_sync")) || {};
+        const scoresSync = getScoresSyncMap();
         let changed = false;
         for (const [sKey, sVal] of Object.entries(scoresSync)) {
           const sAway = String(sVal.Away || "").trim().toLowerCase();
@@ -5840,7 +5891,7 @@
           }
         }
         if (changed) {
-          localStorage.setItem("mmo_scores_sync", JSON.stringify(scoresSync));
+          saveScoresSyncMap(scoresSync);
         }
       } catch (e) {}
 
@@ -5880,6 +5931,89 @@
           })
         }).catch(() => {});
       } catch (err) {}
+    }
+
+    // ========================================
+    // QUẢN LÝ XÓA ĐIỂM DANH TRẬN ĐẤU & DỌN DẸP DỮ LIỆU ĐIỂM DANH TEST
+    // ========================================
+    async function handleClearMatchAttendance(dateVal, awayVal) {
+      if (!confirm(`Bạn có chắc chắn muốn XÓA TOÀN BỘ danh sách điểm danh báo cầu của trận:\n\n📅 Ngày: ${dateVal} (vs ${awayVal})\n\nSau khi xóa, danh sách báo ra sân của trận này sẽ được đưa về 0.`)) return;
+
+      const canonKey = getMatchCanonicalKey(dateVal, awayVal);
+      const storageKey = "mmo_attendance_" + canonKey;
+      localStorage.removeItem(storageKey);
+
+      if (Array.isArray(allAttendance)) {
+        allAttendance = allAttendance.filter(r => {
+          const rKey = getMatchCanonicalKey(r.matchDate || r.matchKey, r.matchOpponent || "");
+          return rKey !== canonKey;
+        });
+        localStorage.setItem("mmo_cloud_attendance", JSON.stringify(allAttendance));
+      }
+
+      localStorage.setItem("mmo_matches_updated_ts", String(Date.now()));
+      try { window.dispatchEvent(new Event("storage")); } catch (e) {}
+
+      try {
+        fetch(API_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "clear_attendance",
+            matchKey: canonKey,
+            matchDate: dateVal
+          })
+        }).catch(() => {});
+      } catch (e) {}
+
+      showToast(`✓ Đã xóa sạch điểm danh trận ngày ${dateVal} (vs ${awayVal})!`, "success");
+      renderPlayerStatsTable();
+    }
+
+    async function handleCleanTestAttendance() {
+      if (!confirm("Bạn có chắc chắn muốn DỌN SẠCH các lượt điểm danh test (Chưa có lịch / Đang tìm đối thủ) trên hệ thống và đám mây không?\n\nThao tác này sẽ xóa hết các bản ghi điểm danh rác cũ.")) return;
+
+      // 1. Dọn dẹp trong localStorage của máy
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.includes("ch_a_c__l_ch") || k.includes("fixture") || k === "mmo_attendance_mmo_match_upcoming")) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+
+      // Lọc sạch allAttendance
+      if (Array.isArray(allAttendance)) {
+        allAttendance = allAttendance.filter(r => {
+          const k = String(r.matchKey || "").toLowerCase();
+          const d = String(r.matchDate || "").toLowerCase();
+          const opp = String(r.matchOpponent || "").toLowerCase();
+          return !k.includes("ch_a_c__l_ch") && !k.includes("fixture") && !d.includes("chưa có") && !opp.includes("đang tìm");
+        });
+        localStorage.setItem("mmo_cloud_attendance", JSON.stringify(allAttendance));
+      }
+
+      // Kích hoạt đồng bộ sang index.html
+      localStorage.setItem("mmo_matches_updated_ts", String(Date.now()));
+      try { window.dispatchEvent(new Event("storage")); } catch (e) {}
+
+      // 2. Gửi lệnh xóa lên Google Sheet
+      try {
+        fetch(API_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "clear_attendance",
+            matchKey: "mmo_match_ch_a_c__l_ch"
+          })
+        }).catch(() => {});
+      } catch (e) {}
+
+      showToast("✓ Đã dọn sạch các lượt điểm danh test/rác!", "success");
+      renderPlayerStatsTable();
     }
 
     // ========================================
@@ -6190,7 +6324,7 @@
       customList.push(newPlayer);
       localStorage.setItem("mmo_custom_players", JSON.stringify(customList));
       localStorage.setItem("mmo_player_sync", String(Date.now()));
-      localStorage.setItem("mmo_scores_sync", String(Date.now()));
+      localStorage.setItem("mmo_matches_updated_ts", String(Date.now()));
 
       // Cập nhật giao diện Admin ngay
       renderPlayerStatsTable();
@@ -6353,7 +6487,7 @@
       }
 
       localStorage.setItem("mmo_player_sync", String(Date.now()));
-      localStorage.setItem("mmo_scores_sync", String(Date.now()));
+      localStorage.setItem("mmo_matches_updated_ts", String(Date.now()));
 
       renderPlayerStatsTable();
       closeUpdatePhotoModal();
@@ -6420,7 +6554,7 @@
       }
 
       localStorage.setItem("mmo_player_sync", String(Date.now()));
-      localStorage.setItem("mmo_scores_sync", String(Date.now()));
+      localStorage.setItem("mmo_matches_updated_ts", String(Date.now()));
 
       renderPlayerStatsTable();
       closeUpdatePhotoModal();
@@ -6689,7 +6823,7 @@
       }
 
       localStorage.setItem("mmo_player_sync", String(Date.now()));
-      localStorage.setItem("mmo_scores_sync", String(Date.now()));
+      localStorage.setItem("mmo_matches_updated_ts", String(Date.now()));
 
       renderPlayerStatsTable();
       renderScorerChips();
@@ -6776,7 +6910,7 @@
       }
       localStorage.setItem("mmo_player_photos", JSON.stringify(photoOverrides));
       localStorage.setItem("mmo_player_sync", String(Date.now()));
-      localStorage.setItem("mmo_scores_sync", String(Date.now()));
+      localStorage.setItem("mmo_matches_updated_ts", String(Date.now()));
 
       // 4. Cập nhật giao diện Admin ngay
       renderPlayerStatsTable();
@@ -6804,7 +6938,7 @@
       if (!confirm("Bạn có chắc muốn khôi phục lại toàn bộ các cầu thủ cũ (bỏ ẩn danh sách)?")) return;
       localStorage.removeItem("mmo_hidden_players");
       localStorage.setItem("mmo_player_sync", String(Date.now()));
-      localStorage.setItem("mmo_scores_sync", String(Date.now()));
+      localStorage.setItem("mmo_matches_updated_ts", String(Date.now()));
       renderPlayerStatsTable();
       renderScorerChips();
       showToast("✓ Đã khôi phục đầy đủ đội hình gốc ban đầu!", "success");

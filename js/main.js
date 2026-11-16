@@ -324,9 +324,30 @@ function purgeLegacyDemoMatches(list) {
     });
 }
 
+// HÀM LẤY VÀ LƯU DỮ LIỆU ĐIỂM SỐ & BÀN THẮNG CHUẨN XÁC, KHÔNG BỊ LỖI ÉP KIỂU
+function getScoresSyncMap() {
+    try {
+        const raw = localStorage.getItem("mmo_scores_sync");
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            return parsed;
+        }
+    } catch (e) {}
+    return {};
+}
+
+function saveScoresSyncMap(map) {
+    try {
+        if (map && typeof map === "object" && !Array.isArray(map)) {
+            localStorage.setItem("mmo_scores_sync", JSON.stringify(map));
+        }
+    } catch (e) {}
+}
+
 function purgeLegacyScoresSync() {
     try {
-        let scoresSync = JSON.parse(localStorage.getItem("mmo_scores_sync")) || {};
+        const scoresSync = getScoresSyncMap();
         let changed = false;
         const demoKeywords = ["fc friends", "friends", "team a", "team b", "team_a", "team_b", "duy tân fc", "duy tan fc", "duy tân", "duy tan"];
         for (const [k, v] of Object.entries(scoresSync)) {
@@ -341,7 +362,7 @@ function purgeLegacyScoresSync() {
             }
         }
         if (changed) {
-            localStorage.setItem("mmo_scores_sync", JSON.stringify(scoresSync));
+            saveScoresSyncMap(scoresSync);
         }
     } catch (e) {}
 }
@@ -364,10 +385,7 @@ function applyScoresOverride(matches) {
     // Lọc bỏ triệt để các trận đã bị xoá bởi admin
     matches = matches.filter(m => !isMatchDeleted(m, deletedList));
 
-    let scoresSync = {};
-    try {
-        scoresSync = JSON.parse(localStorage.getItem("mmo_scores_sync")) || {};
-    } catch (e) {}
+    const scoresSync = getScoresSyncMap();
 
     matches.forEach(m => {
         const cleanHome = String(m.Home || "").trim().toLowerCase();
@@ -610,11 +628,7 @@ async function loadMatches() {
         });
 
         if (data && data.success === true) {
-            if (cloudMatches && cloudMatches.length > 0) {
-                matchData = applyScoresOverride(cloudMatches);
-            } else {
-                matchData = [];
-            }
+            matchData = applyScoresOverride(cloudMatches || []);
             try {
                 localStorage.setItem("mmo_matches_cache", JSON.stringify(matchData));
             } catch (e) {}
@@ -1348,12 +1362,13 @@ function getPlayerMeta(name) {
 }
 
 function renderPlayerTile(item, statusType) {
-    const meta = getPlayerMeta(item.name);
+    const pName = canonicalAttendancePlayerName(item.name);
+    const meta = getPlayerMeta(pName);
     return `
         <div class="player-roster-tile ${statusType}">
             <div class="prt-jersey">#${meta.num}</div>
             <div class="prt-body">
-                <span class="prt-name">${item.name}</span>
+                <span class="prt-name">${pName}</span>
                 <span class="prt-role">${meta.role}</span>
             </div>
             <div class="prt-time">${item.time || ""}</div>
@@ -1477,7 +1492,8 @@ function getMatchCanonicalKey(matchOrDate, opponent) {
 function canonicalAttendancePlayerName(name) {
     if (!name) return "";
     const clean = String(name).trim();
-    if (normalizePlayerName(clean) === "nguyen sida" || clean.toUpperCase() === "NGUYEN SIDA") {
+    const norm = normalizePlayerName(clean);
+    if (norm === "nguyen sida" || norm.includes("sida") || clean.toUpperCase().includes("SIDA")) {
         return "N73";
     }
     return clean;
@@ -1486,6 +1502,15 @@ function canonicalAttendancePlayerName(name) {
 // Tự động dọn dẹp và hợp nhất các key rác cũ trong localStorage về key chuẩn duy nhất
 function cleanupLegacyAttendanceKeys() {
     const keysToRemove = [];
+
+    // 1. Dọn sạch các key điểm danh test/placeholder cũ (ch_a_c__l_ch, fixture, upcoming placeholder)
+    for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.includes("ch_a_c__l_ch") || k.includes("fixture") || k === "mmo_attendance_mmo_match_upcoming")) {
+            keysToRemove.push(k);
+        }
+    }
+
     for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (k && k.startsWith("mmo_attendance_")) {
@@ -1560,9 +1585,17 @@ function cleanupLegacyAttendanceKeys() {
 function syncAttendanceFromCloud(cloudRecords) {
     if (!Array.isArray(cloudRecords) || cloudRecords.length === 0) return;
 
+    // Lọc bỏ triệt để các dữ liệu điểm danh rác/test của các trận placeholder ("Chưa có lịch", "Đang tìm đối thủ")
+    const validCloudRecords = cloudRecords.filter(r => {
+        const k = String(r.matchKey || "").toLowerCase();
+        const d = String(r.matchDate || "").toLowerCase();
+        const opp = String(r.matchOpponent || "").toLowerCase();
+        return !k.includes("ch_a_c__l_ch") && !k.includes("fixture") && !d.includes("chưa có") && !opp.includes("đang tìm");
+    });
+
     // Lưu bản sao dữ liệu đám mây để tính toán đối chiếu (chuẩn hóa tên ngay khi lưu)
     try {
-        const cleanedCloud = cloudRecords.map(r => ({
+        const cleanedCloud = validCloudRecords.map(r => ({
             ...r,
             playerName: canonicalAttendancePlayerName(r.playerName)
         }));
@@ -1570,11 +1603,12 @@ function syncAttendanceFromCloud(cloudRecords) {
     } catch (e) {}
 
     const grouped = {};
-    cloudRecords.forEach(row => {
+    validCloudRecords.forEach(row => {
         const canonKey = getMatchCanonicalKey(row.matchDate || row.matchKey, row.matchOpponent || "");
         if (!grouped[canonKey]) grouped[canonKey] = [];
         const rName = canonicalAttendancePlayerName(row.playerName);
         const rNorm = normalizePlayerName(rName);
+        if (rNorm === "nguyen sida") return;
 
         const existingIdx = grouped[canonKey].findIndex(r => normalizePlayerName(r.name) === rNorm);
         if (existingIdx !== -1) {
@@ -1641,24 +1675,30 @@ function loadAttendance(match) {
     if (locEl) locEl.textContent = location;
     if (tournEl) tournEl.textContent = tourn;
 
+    const isPlaceholder = date === "Chưa có lịch" || String(away).toLowerCase().includes("đang tìm đối thủ");
     const storageKey = "mmo_attendance_" + currentMatchKey;
     let records = [];
-    try {
-        records = JSON.parse(localStorage.getItem(storageKey)) || [];
-    } catch (e) {
-        records = [];
+    if (!isPlaceholder) {
+        try {
+            records = JSON.parse(localStorage.getItem(storageKey)) || [];
+        } catch (e) {
+            records = [];
+        }
     }
 
     // Tự động làm sạch và đồng nhất danh sách điểm danh
     let attChanged = false;
     const uniqueMap = new Map();
     (records || []).forEach(r => {
+        if (!r || !r.name) return;
         const cName = canonicalAttendancePlayerName(r.name);
+        const norm = normalizePlayerName(cName);
+        if (norm === "nguyen sida") return;
         if (r.name !== cName) attChanged = true;
-        uniqueMap.set(normalizePlayerName(cName), { ...r, name: cName });
+        uniqueMap.set(norm, { ...r, name: cName });
     });
     records = Array.from(uniqueMap.values());
-    if (attChanged) {
+    if (attChanged && !isPlaceholder) {
         try { localStorage.setItem(storageKey, JSON.stringify(records)); } catch (e) {}
     }
 
@@ -1744,9 +1784,20 @@ function renderAttendance(records) {
 
     if (!yesList) return;
 
-    const yesItems = records.filter(r => r.status === "yes");
-    const maybeItems = records.filter(r => r.status === "maybe");
-    const noItems = records.filter(r => r.status === "no");
+    // Chuẩn hóa và lọc trùng lặp lần cuối trước khi render (khử sạch tên cũ Nguyen sida và gộp về 1 bản ghi duy nhất)
+    const seenMap = new Map();
+    (records || []).forEach(r => {
+        if (!r || !r.name) return;
+        const cName = canonicalAttendancePlayerName(r.name);
+        const norm = normalizePlayerName(cName);
+        if (norm === "nguyen sida") return;
+        seenMap.set(norm, { ...r, name: cName });
+    });
+    const finalRecords = Array.from(seenMap.values());
+
+    const yesItems = finalRecords.filter(r => r.status === "yes");
+    const maybeItems = finalRecords.filter(r => r.status === "maybe");
+    const noItems = finalRecords.filter(r => r.status === "no");
 
     const totalYes = yesItems.length;
 
@@ -1913,7 +1964,7 @@ function updateTopScorers(matches) {
 
     // Quét trực tiếp thêm từ mmo_scores_sync để cập nhật ngay khi Admin vừa bấm lưu tỉ số trận đấu
     try {
-        const scoresSync = JSON.parse(localStorage.getItem("mmo_scores_sync")) || {};
+        const scoresSync = getScoresSyncMap();
         for (const [sKey, sVal] of Object.entries(scoresSync)) {
             if (!sVal || !sVal.Scorers) continue;
             const canonKey = (typeof getMatchCanonicalKey === "function") ? getMatchCanonicalKey(sVal) : sKey;
@@ -2334,7 +2385,7 @@ function getPlayerDetailedStats(playerName) {
 
         // 2. Quét cộng dồn từ mmo_scores_sync (nếu có trận mới lưu từ Admin)
         try {
-            const scoresSync = JSON.parse(localStorage.getItem("mmo_scores_sync")) || {};
+            const scoresSync = getScoresSyncMap();
             for (const [k, sVal] of Object.entries(scoresSync)) {
                 if (!sVal) continue;
                 const sKey = getMatchCanonicalKey(sVal);
@@ -3368,7 +3419,7 @@ function saveGuestBorrowedPlayers(list) {
         });
     });
     localStorage.setItem("mmo_custom_players", JSON.stringify(customList));
-    localStorage.setItem("mmo_scores_sync", String(Date.now()));
+    localStorage.setItem("mmo_matches_updated_ts", String(Date.now()));
 }
 
 function handleTacticsBorrowGuest() {
@@ -3419,7 +3470,7 @@ function handleTacticsClearGuest() {
     try { customList = JSON.parse(localStorage.getItem("mmo_custom_players")) || []; } catch(e) {}
     customList = customList.filter(p => !p.isGuest);
     localStorage.setItem("mmo_custom_players", JSON.stringify(customList));
-    localStorage.setItem("mmo_scores_sync", String(Date.now()));
+    localStorage.setItem("mmo_matches_updated_ts", String(Date.now()));
 
     renderTacticsField(currentFormationScheme);
     alert("✅ Đã trả toàn bộ cầu thủ mượn ngoài!");
